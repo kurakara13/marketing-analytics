@@ -134,24 +134,53 @@ export async function syncConnection(args: {
 
     return { success: true, recordsCount: rows.length, syncRunId: run.id };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const rawMessage = error instanceof Error ? error.message : String(error);
+    const friendlyMessage = humanizeSyncError(rawMessage);
 
     await db
       .update(syncRuns)
       .set({
         status: "error",
-        errorMessage: message,
+        // Store the friendly version — it surfaces directly in the
+        // dashboard "last sync" line and in toast notifications.
+        errorMessage: friendlyMessage,
         finishedAt: new Date(),
       })
       .where(eq(syncRuns.id, run.id));
 
     await db
       .update(connections)
-      .set({ lastError: message, updatedAt: new Date() })
+      .set({ lastError: friendlyMessage, updatedAt: new Date() })
       .where(eq(connections.id, connection.id));
 
-    return { success: false, error: message, syncRunId: run.id };
+    return { success: false, error: friendlyMessage, syncRunId: run.id };
   }
+}
+
+// Map known upstream error fragments to user-readable Indonesian messages.
+// Falls through to the raw message when we don't recognize the pattern.
+function humanizeSyncError(raw: string): string {
+  if (raw.includes("DEVELOPER_TOKEN_NOT_APPROVED")) {
+    return "Dev token Google Ads masih Test access — fetch real production data baru bisa setelah Basic access disetujui Google. Status review: https://ads.google.com/aw/apicenter";
+  }
+  if (raw.includes("USER_PERMISSION_DENIED")) {
+    return "Akses ditolak Google Ads. Kemungkinan login-customer-id (manager MCC) yang dipakai tidak benar atau OAuth user tidak punya permission ke akun ini.";
+  }
+  if (raw.includes("CUSTOMER_NOT_ENABLED")) {
+    return "Akun Google Ads tidak aktif (mungkin di-suspend atau di-pause).";
+  }
+  if (raw.includes("AUTHENTICATION_ERROR") || raw.includes("invalid_grant")) {
+    return "OAuth token tidak valid lagi. Disconnect dan reconnect akun ini.";
+  }
+  // GA4-specific
+  if (raw.includes("PERMISSION_DENIED") && raw.includes("analytics")) {
+    return "GA4 menolak permission. Disconnect dan reconnect dengan akun Google yang punya akses ke property ini.";
+  }
+  // Truncate raw error for readability if it's a multi-line API dump.
+  if (raw.length > 500) {
+    return raw.slice(0, 500) + "... (truncated; cek log dev server untuk full)";
+  }
+  return raw;
 }
 
 async function persistDailyMetrics(args: {
