@@ -32,6 +32,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# drizzle migration metadata cache (regenerate-able)
+/lib/db/migrations/meta/
 
 # vercel
 .vercel
