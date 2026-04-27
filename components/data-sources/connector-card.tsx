@@ -64,7 +64,11 @@ function LastSyncLine({ conn }: { conn: ConnectionWithLastSync }) {
     return (
       <div className="text-destructive inline-flex items-start gap-1 text-xs">
         <AlertCircle className="mt-0.5 size-3 shrink-0" />
-        <span className="break-words">
+        {/* suppressHydrationWarning: `ago` is computed from Date.now() at
+            render time, so the server-rendered string can drift by a few
+            milliseconds vs the client hydration value. The displayed text
+            is correct in both cases. */}
+        <span className="break-words" suppressHydrationWarning>
           Sync gagal {ago}: {lastSync.errorMessage ?? "(tanpa pesan)"}
         </span>
       </div>
@@ -72,7 +76,7 @@ function LastSyncLine({ conn }: { conn: ConnectionWithLastSync }) {
   }
 
   return (
-    <div className="text-muted-foreground text-xs">
+    <div className="text-muted-foreground text-xs" suppressHydrationWarning>
       Sync terakhir {ago} — {lastSync.recordsCount ?? 0} baris.
     </div>
   );

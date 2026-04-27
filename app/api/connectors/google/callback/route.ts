@@ -4,12 +4,9 @@ import { cookies } from "next/headers";
 import { auth } from "@/lib/auth";
 import { getConnector } from "@/lib/connectors/registry";
 import { exchangeCodeForTokens } from "@/lib/google/oauth";
-import {
-  deletePlaceholderConnection,
-  persistConnections,
-} from "@/lib/connections";
 import type { ExternalAccount } from "@/lib/connectors/types";
 import { OAUTH_SESSION_COOKIE } from "../connect/route";
+import { setPending } from "@/lib/oauth-pending-cookie";
 
 type OAuthSession = {
   state: string;
@@ -32,10 +29,10 @@ function redirectTo(
 // GET /api/connectors/google/callback?code=...&state=...
 //
 // Receives Google's OAuth redirect, validates state, exchanges the code
-// for tokens, asks the connector which external accounts the user just
-// granted access to, and upserts one connection row per account with
-// encrypted tokens. Always redirects back to /data-sources with a status
-// query string so the UI can show a toast.
+// for tokens, and discovers which external accounts the user has access
+// to. Instead of immediately persisting connections, we drop the tokens +
+// candidate accounts into an encrypted short-lived cookie and redirect to
+// /data-sources/select so the user can pick which accounts to connect.
 export async function GET(request: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -47,8 +44,7 @@ export async function GET(request: NextRequest) {
   const code = params.get("code");
   const stateFromQuery = params.get("state");
 
-  // Always clear the oauth session cookie on the way out, regardless of
-  // outcome — it has served its purpose.
+  // Always clear the oauth_session cookie on the way out.
   const cookieStore = await cookies();
   const sessionCookie = cookieStore.get(OAUTH_SESSION_COOKIE);
   cookieStore.delete(OAUTH_SESSION_COOKIE);
@@ -140,38 +136,15 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  try {
-    await persistConnections({
-      userId: session.user.id,
-      connectorId: connector.id,
-      tokens,
-      accounts,
-    });
-  } catch (err) {
-    console.error("[oauth callback] persistConnections failed:", err);
-    return redirectTo(request, "/data-sources", {
-      status: "error",
-      reason: "persist_failed",
-    });
-  }
-
-  // Sweep up any leftover Phase-1.1-era placeholder row for the same
-  // user+connector. No-op in normal cases.
-  try {
-    await deletePlaceholderConnection({
-      userId: session.user.id,
-      connectorId: connector.id,
-    });
-  } catch (err) {
-    console.warn(
-      "[oauth callback] failed to delete placeholder (non-fatal):",
-      err,
-    );
-  }
-
-  return redirectTo(request, "/data-sources", {
-    status: "connected",
-    connector: connector.id,
-    count: String(accounts.length),
+  // Stash tokens + accounts in an encrypted, httpOnly, short-lived cookie
+  // and let the user pick which accounts to actually connect.
+  await setPending({
+    connectorId: connector.id,
+    userId: session.user.id,
+    tokens,
+    accounts,
+    createdAt: Date.now(),
   });
+
+  return NextResponse.redirect(new URL("/data-sources/select", request.url));
 }

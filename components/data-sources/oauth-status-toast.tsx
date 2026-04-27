@@ -41,6 +41,8 @@ export function OAuthStatusToast() {
 
     if (status === "connected") {
       toast.success(`${connector} terhubung — ${count ?? "?"} akun tersimpan.`);
+    } else if (status === "cancelled") {
+      toast.info("Pemilihan akun dibatalkan. Tidak ada koneksi disimpan.");
     } else if (status === "error") {
       const reason = params.get("reason") ?? "unknown";
       const detail = params.get("detail");
