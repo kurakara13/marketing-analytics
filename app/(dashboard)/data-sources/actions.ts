@@ -16,6 +16,13 @@ const syncInput = connectionIdInput.extend({
   days: z.number().int().min(1).max(90).optional(),
 });
 
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+const backfillInput = connectionIdInput.extend({
+  startDate: z.string().regex(ISO_DATE, "Format tanggal harus YYYY-MM-DD"),
+  endDate: z.string().regex(ISO_DATE, "Format tanggal harus YYYY-MM-DD"),
+});
+
 export type DisconnectResult = { error: string } | { success: true };
 
 export async function disconnectConnectionAction(
@@ -69,6 +76,81 @@ export async function syncConnectionAction(
     return { error: result.error ?? "Sync gagal" };
   }
   return { success: true, recordsCount: result.recordsCount ?? 0 };
+}
+
+export type BackfillResult =
+  | { error: string }
+  | { success: true; recordsCount: number; rangeStart: string; rangeEnd: string };
+
+/**
+ * Pull historical data for one connection over an arbitrary date range.
+ * Uses the same upsert path as the daily sync, so re-running for the
+ * same window simply overwrites existing rows.
+ *
+ * Bounds: end >= start, end < today (yesterday is the latest complete
+ * day for GA4), and the window is capped at ~3 years to keep upstream
+ * API quota and request time reasonable.
+ */
+export async function backfillConnectionAction(
+  input: z.infer<typeof backfillInput>,
+): Promise<BackfillResult> {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return { error: "Tidak ada session aktif" };
+  }
+
+  const parsed = backfillInput.safeParse(input);
+  if (!parsed.success) {
+    return { error: "Tanggal tidak valid" };
+  }
+
+  const { startDate, endDate, connectionId } = parsed.data;
+
+  const start = new Date(startDate + "T00:00:00Z");
+  const end = new Date(endDate + "T00:00:00Z");
+  if (Number.isNaN(start.valueOf()) || Number.isNaN(end.valueOf())) {
+    return { error: "Tanggal tidak valid" };
+  }
+  if (end < start) {
+    return { error: "Tanggal akhir harus setelah tanggal mulai" };
+  }
+  const today = new Date();
+  const yesterdayUTC = new Date(
+    Date.UTC(
+      today.getUTCFullYear(),
+      today.getUTCMonth(),
+      today.getUTCDate() - 1,
+    ),
+  );
+  if (end > yesterdayUTC) {
+    return {
+      error: "Tanggal akhir maksimal kemarin (data hari ini belum lengkap)",
+    };
+  }
+  const maxDays = 365 * 3;
+  const diffDays =
+    Math.floor((end.valueOf() - start.valueOf()) / (24 * 60 * 60 * 1000)) + 1;
+  if (diffDays > maxDays) {
+    return { error: `Range maksimum ${maxDays} hari (3 tahun)` };
+  }
+
+  const result = await syncConnection({
+    connectionId,
+    userId: session.user.id,
+    range: { start: startDate, end: endDate },
+  });
+
+  revalidatePath("/data-sources");
+
+  if (!result.success) {
+    return { error: result.error ?? "Backfill gagal" };
+  }
+  return {
+    success: true,
+    recordsCount: result.recordsCount ?? 0,
+    rangeStart: startDate,
+    rangeEnd: endDate,
+  };
 }
 
 export type SyncAllResult =
