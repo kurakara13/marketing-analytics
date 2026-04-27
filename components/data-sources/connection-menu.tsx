@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -71,17 +72,21 @@ export function ConnectionMenu({ connectionId, accountName }: Props) {
         <MoreVertical className={cn("size-4", isPending && "animate-pulse")} />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-52">
-        <DropdownMenuLabel>Sync</DropdownMenuLabel>
-        {RANGE_OPTIONS.map((option) => (
-          <DropdownMenuItem
-            key={option.label}
-            onClick={() => handleSync(option.days)}
-            disabled={isPending}
-          >
-            <RefreshCw className={cn("size-4", isPending && "animate-spin")} />
-            {option.label}
-          </DropdownMenuItem>
-        ))}
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Sync</DropdownMenuLabel>
+          {RANGE_OPTIONS.map((option) => (
+            <DropdownMenuItem
+              key={option.label}
+              onClick={() => handleSync(option.days)}
+              disabled={isPending}
+            >
+              <RefreshCw
+                className={cn("size-4", isPending && "animate-spin")}
+              />
+              {option.label}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={handleDisconnect}
