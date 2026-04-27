@@ -2,7 +2,12 @@
 // accounts the OAuth user can read.
 // https://developers.google.com/google-ads/api/rest/reference/rest
 
-const ADS_BASE = "https://googleads.googleapis.com/v17";
+// Google Ads API release cadence is ~3-4 months and old versions sunset
+// after ~14 months. When this version sunsets, bump to the latest from
+// https://developers.google.com/google-ads/api/docs/release-notes and
+// re-test against searchStream output (response shape is generally stable
+// but field renames happen between major versions).
+const ADS_BASE = "https://googleads.googleapis.com/v24";
 
 type ListAccessibleCustomersResponse = {
   resourceNames?: string[];

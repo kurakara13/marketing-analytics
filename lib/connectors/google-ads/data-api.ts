@@ -1,7 +1,7 @@
 // Google Ads searchStream endpoint — runs a GAQL query and returns rows.
 // https://developers.google.com/google-ads/api/docs/query/overview
 
-const ADS_BASE = "https://googleads.googleapis.com/v17";
+const ADS_BASE = "https://googleads.googleapis.com/v24";
 
 export type GoogleAdsRow = {
   campaign?: {
