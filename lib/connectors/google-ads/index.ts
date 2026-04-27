@@ -19,7 +19,10 @@ function getDeveloperToken(): string {
 function getEnvLoginCustomerId(): string | undefined {
   // Env-level fallback (legacy / single-tenant). Per-connection
   // loginCustomerId from the database takes precedence.
-  return process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID || undefined;
+  // Strip dashes — users often paste the display format ("243-701-0188")
+  // but Google Ads expects 10 digits ("2437010188").
+  const raw = process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID?.replace(/-/g, "");
+  return raw || undefined;
 }
 
 function microsToUnits(micros: string | undefined): number | null {
@@ -63,22 +66,24 @@ export const googleAdsConnector: Connector = {
 
   async listAccounts(tokens) {
     const developerToken = getDeveloperToken();
-    const envLoginCustomerId = getEnvLoginCustomerId();
 
     const customerIds = await listAccessibleCustomers({
       accessToken: tokens.accessToken,
       developerToken,
     });
 
-    // Probe each customer for name + manager flag in parallel. Probe
-    // failures (revoked / cross-MCC) just leave name/isManager unresolved.
+    // Probe each customer for name + manager flag in parallel. We probe
+    // WITHOUT passing the env loginCustomerId — that env value is often
+    // wrong (a fresh MCC that doesn't actually manage these customers)
+    // and would cause every probe to 403, hiding which one is the real
+    // manager. OAuth users with direct user-level access to a customer
+    // (typical for managers themselves) succeed without the header.
     const probes = await Promise.all(
       customerIds.map(async (id) => {
         const info = await getCustomerInfo({
           accessToken: tokens.accessToken,
           developerToken,
           customerId: id,
-          loginCustomerId: envLoginCustomerId,
         }).catch(() => null);
         return {
           id,
@@ -100,7 +105,11 @@ export const googleAdsConnector: Connector = {
       .map((p) => ({
         id: p.id,
         name: p.name ?? p.id,
-        loginCustomerId: managers[0]?.id ?? envLoginCustomerId ?? null,
+        // First detected manager wins. If none detected, leave null —
+        // either the user has direct access (no header needed) or they
+        // need to provide it via GOOGLE_ADS_LOGIN_CUSTOMER_ID env (used
+        // as fallback in fetchMetrics).
+        loginCustomerId: managers[0]?.id ?? null,
       }));
 
     return accounts;
