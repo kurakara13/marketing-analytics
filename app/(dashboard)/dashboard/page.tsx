@@ -23,7 +23,8 @@ import {
 import { CampaignsTable } from "@/components/dashboard/campaigns-table";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { MetricsChart } from "@/components/dashboard/metrics-chart";
-import { RangePicker, RANGE_VALUES } from "@/components/dashboard/range-picker";
+import { RangePicker } from "@/components/dashboard/range-picker";
+import { DEFAULT_DAYS, parseDaysParam } from "@/lib/dashboard-ranges";
 import { cn } from "@/lib/utils";
 
 const numberFmt = new Intl.NumberFormat("id-ID");
@@ -31,13 +32,6 @@ const compactFmt = new Intl.NumberFormat("id-ID", {
   notation: "compact",
   maximumFractionDigits: 1,
 });
-
-const DEFAULT_DAYS = 30;
-
-function parseDays(raw: string | undefined): number {
-  const n = Number(raw);
-  return RANGE_VALUES.includes(n) ? n : DEFAULT_DAYS;
-}
 
 export default async function DashboardPage({
   searchParams,
@@ -48,7 +42,7 @@ export default async function DashboardPage({
   if (!session?.user?.id) redirect("/login");
 
   const params = await searchParams;
-  const windowDays = parseDays(params?.days);
+  const windowDays = parseDaysParam(params?.days);
 
   const greetingName = session.user.name ?? session.user.email ?? "";
   const [summary, campaignRows] = await Promise.all([

@@ -10,16 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
-const RANGES = [
-  { value: "7", label: "7 hari terakhir" },
-  { value: "14", label: "14 hari terakhir" },
-  { value: "30", label: "30 hari terakhir" },
-  { value: "60", label: "60 hari terakhir" },
-  { value: "90", label: "90 hari terakhir" },
-] as const;
-
-export const RANGE_VALUES = RANGES.map((r) => Number(r.value));
+import { RANGE_OPTIONS } from "@/lib/dashboard-ranges";
 
 type Props = {
   defaultDays: number;
@@ -58,7 +49,7 @@ export function RangePicker({ defaultDays }: Props) {
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {RANGES.map((r) => (
+        {RANGE_OPTIONS.map((r) => (
           <SelectItem key={r.value} value={r.value}>
             {r.label}
           </SelectItem>
