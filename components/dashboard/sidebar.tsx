@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   BarChart3,
   Database,
+  FileText,
   LayoutDashboard,
   Settings,
   Sparkles,
@@ -15,6 +16,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/data-sources", label: "Data Sources", icon: Database },
+  { href: "/reports", label: "Reports", icon: FileText },
   { href: "/insights", label: "Insights", icon: Sparkles },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
