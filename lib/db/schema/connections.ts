@@ -25,6 +25,13 @@ export const connections = pgTable(
     connectorId: text("connector_id").notNull(),
     externalAccountId: text("external_account_id").notNull(),
     externalAccountName: text("external_account_name"),
+    /**
+     * Connector-specific routing hint. For Google Ads, the manager
+     * customer id used in the `login-customer-id` header when the
+     * external account is accessed via an MCC. Null when access is
+     * direct or the connector doesn't need this.
+     */
+    loginCustomerId: text("login_customer_id"),
 
     // OAuth state. Refresh + access tokens are AES-256-GCM ciphertext (see
     // lib/crypto.ts). Access tokens are short-lived; we cache them between

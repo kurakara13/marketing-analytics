@@ -1,5 +1,5 @@
-import type { Connector, NormalizedMetric } from "../types";
-import { getCustomerName, listAccessibleCustomers } from "./admin-api";
+import type { Connector, ExternalAccount, NormalizedMetric } from "../types";
+import { getCustomerInfo, listAccessibleCustomers } from "./admin-api";
 import { searchStream } from "./data-api";
 
 export const GOOGLE_ADS_SCOPES = [
@@ -16,9 +16,9 @@ function getDeveloperToken(): string {
   return token;
 }
 
-function getLoginCustomerId(): string | undefined {
-  // Optional. Required only when accessing customers under a manager
-  // (MCC) account.
+function getEnvLoginCustomerId(): string | undefined {
+  // Env-level fallback (legacy / single-tenant). Per-connection
+  // loginCustomerId from the database takes precedence.
   return process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID || undefined;
 }
 
@@ -63,33 +63,53 @@ export const googleAdsConnector: Connector = {
 
   async listAccounts(tokens) {
     const developerToken = getDeveloperToken();
-    const loginCustomerId = getLoginCustomerId();
+    const envLoginCustomerId = getEnvLoginCustomerId();
 
     const customerIds = await listAccessibleCustomers({
       accessToken: tokens.accessToken,
       developerToken,
     });
 
-    // Resolve names in parallel. Failed lookups (e.g. inactive customers)
-    // fall back to the raw id so the user can still see + disconnect them.
-    const accounts = await Promise.all(
+    // Probe each customer for name + manager flag in parallel. Probe
+    // failures (revoked / cross-MCC) just leave name/isManager unresolved.
+    const probes = await Promise.all(
       customerIds.map(async (id) => {
-        const name = await getCustomerName({
+        const info = await getCustomerInfo({
           accessToken: tokens.accessToken,
           developerToken,
           customerId: id,
-          loginCustomerId,
+          loginCustomerId: envLoginCustomerId,
         }).catch(() => null);
-        return { id, name: name ?? id };
+        return {
+          id,
+          name: info?.name ?? null,
+          isManager: info?.isManager === true,
+        };
       }),
     );
+
+    const managers = probes.filter((p) => p.isManager);
+
+    // Hide managers from the selection list — they don't have campaign
+    // data of their own, only routing context. For each non-manager:
+    // attach the first detected manager as loginCustomerId so subsequent
+    // searchStream calls succeed when access is via MCC. If there are no
+    // managers in the list, access is direct (no header needed).
+    const accounts: ExternalAccount[] = probes
+      .filter((p) => !p.isManager)
+      .map((p) => ({
+        id: p.id,
+        name: p.name ?? p.id,
+        loginCustomerId: managers[0]?.id ?? envLoginCustomerId ?? null,
+      }));
 
     return accounts;
   },
 
-  async fetchMetrics({ tokens, accountId, range }) {
+  async fetchMetrics({ tokens, accountId, range, loginCustomerId }) {
     const developerToken = getDeveloperToken();
-    const loginCustomerId = getLoginCustomerId();
+    // Per-connection loginCustomerId takes priority over the env fallback.
+    const effectiveLoginCustomerId = loginCustomerId ?? getEnvLoginCustomerId();
 
     const query = DAILY_GAQL.replace("$START", range.start).replace(
       "$END",
@@ -100,7 +120,7 @@ export const googleAdsConnector: Connector = {
       accessToken: tokens.accessToken,
       developerToken,
       customerId: accountId,
-      loginCustomerId,
+      loginCustomerId: effectiveLoginCustomerId,
       query,
     });
 

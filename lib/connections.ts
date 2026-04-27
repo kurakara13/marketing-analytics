@@ -45,6 +45,7 @@ export async function persistConnections(args: {
         connectorId,
         externalAccountId: account.id,
         externalAccountName: account.name,
+        loginCustomerId: account.loginCustomerId ?? null,
         encryptedRefreshToken,
         encryptedAccessToken,
         accessTokenExpiresAt: tokens.accessTokenExpiresAt,
@@ -61,11 +62,12 @@ export async function persistConnections(args: {
         connections.externalAccountId,
       ],
       // EXCLUDED references the would-be-inserted row, so each conflicting
-      // row keeps its own externalAccountName. Token columns + status are
-      // identical for every row in this insert (same OAuth grant), so we
-      // pass them as plain values.
+      // row keeps its own externalAccountName + loginCustomerId. Token
+      // columns + status are identical for every row in this insert (same
+      // OAuth grant), so we pass them as plain values.
       set: {
         externalAccountName: sql`EXCLUDED.external_account_name`,
+        loginCustomerId: sql`EXCLUDED.login_customer_id`,
         encryptedRefreshToken,
         encryptedAccessToken,
         accessTokenExpiresAt: tokens.accessTokenExpiresAt,

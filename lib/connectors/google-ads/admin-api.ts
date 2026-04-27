@@ -20,8 +20,16 @@ type SearchStreamChunk = {
       descriptiveName?: string;
       currencyCode?: string;
       timeZone?: string;
+      manager?: boolean;
     };
   }>;
+};
+
+export type CustomerInfo = {
+  /** Human-readable name (or null when the API doesn't surface one). */
+  name: string | null;
+  /** True when the customer record is itself a manager (MCC). */
+  isManager: boolean;
 };
 
 /**
@@ -54,15 +62,17 @@ export async function listAccessibleCustomers(args: {
 }
 
 /**
- * Look up the human-readable name for one customer id via GAQL.
- * Returns null if the customer is inaccessible (revoked, terminated, etc).
+ * Look up customer name + manager flag via a single GAQL query against
+ * the customer resource. Returns null when the customer is inaccessible
+ * (revoked, terminated, or requires a different login-customer-id than
+ * we have).
  */
-export async function getCustomerName(args: {
+export async function getCustomerInfo(args: {
   accessToken: string;
   developerToken: string;
   customerId: string;
   loginCustomerId?: string;
-}): Promise<string | null> {
+}): Promise<CustomerInfo | null> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${args.accessToken}`,
     "developer-token": args.developerToken,
@@ -79,7 +89,7 @@ export async function getCustomerName(args: {
       headers,
       body: JSON.stringify({
         query:
-          "SELECT customer.id, customer.descriptive_name FROM customer LIMIT 1",
+          "SELECT customer.id, customer.descriptive_name, customer.manager FROM customer LIMIT 1",
       }),
     },
   );
@@ -89,8 +99,12 @@ export async function getCustomerName(args: {
   const chunks = (await response.json()) as SearchStreamChunk[];
   for (const chunk of chunks ?? []) {
     for (const result of chunk.results ?? []) {
-      const name = result.customer?.descriptiveName;
-      if (name) return name;
+      const customer = result.customer;
+      if (!customer) continue;
+      return {
+        name: customer.descriptiveName ?? null,
+        isManager: customer.manager === true,
+      };
     }
   }
   return null;

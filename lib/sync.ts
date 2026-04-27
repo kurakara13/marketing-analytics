@@ -105,6 +105,7 @@ export async function syncConnection(args: {
       tokens,
       accountId: connection.externalAccountId,
       range,
+      loginCustomerId: connection.loginCustomerId,
     });
 
     if (rows.length > 0) {

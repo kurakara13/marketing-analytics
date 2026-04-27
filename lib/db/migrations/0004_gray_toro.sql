@@ -1,0 +1,1 @@
+ALTER TABLE "connection" ADD COLUMN "login_customer_id" text;

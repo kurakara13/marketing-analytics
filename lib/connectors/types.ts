@@ -16,6 +16,12 @@ export type ExternalAccount = {
   id: string;
   /** Human-readable label shown in the UI. */
   name: string;
+  /**
+   * Connector-specific routing hint. For Google Ads: the manager (MCC)
+   * customer id used in the `login-customer-id` header when fetching
+   * data for a client account. Null/undefined when access is direct.
+   */
+  loginCustomerId?: string | null;
 };
 
 export type DateRange = {
@@ -61,5 +67,10 @@ export interface Connector {
     tokens: OAuthTokens;
     accountId: string;
     range: DateRange;
+    /**
+     * Optional connector-specific routing hint persisted on the
+     * connection (mirrors `loginCustomerId` from `ExternalAccount`).
+     */
+    loginCustomerId?: string | null;
   }): Promise<NormalizedMetric[]>;
 }
