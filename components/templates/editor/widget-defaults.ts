@@ -21,75 +21,97 @@ import {
 // used for widget types we've defined in the schema but haven't
 // implemented end-to-end yet (still need a renderer / config form).
 
+export type WidgetCategory = "layout" | "data" | "ai";
+
 type PaletteItem = {
   type: WidgetType;
   label: string;
   description: string;
+  category: WidgetCategory;
   enabled?: boolean;
 };
 
 export const WIDGET_PALETTE_ITEMS: PaletteItem[] = [
+  // Layout
   {
     type: "text",
     label: "Text",
     description: "Heading, paragraph, atau label statis.",
+    category: "layout",
     enabled: true,
-  },
-  {
-    type: "kpi_card",
-    label: "KPI Card",
-    description: "Single metric value + delta vs periode sebelumnya.",
-    enabled: true,
-  },
-  {
-    type: "line_chart",
-    label: "Line Chart",
-    description: "Trend 6 minggu / 6 bulan dari satu metric.",
-    enabled: true,
-  },
-  {
-    type: "bar_chart",
-    label: "Bar Chart",
-    description: "Bar grouped — actual vs target / vs previous.",
-    enabled: false,
-  },
-  {
-    type: "table",
-    label: "Table",
-    description: "Top N rows by metric (campaigns, pages, dst).",
-    enabled: false,
   },
   {
     type: "cover_block",
     label: "Cover Block",
     description: "Title + subtitle + tanggal untuk slide cover.",
+    category: "layout",
     enabled: false,
   },
   {
     type: "image",
     label: "Image",
     description: "Logo atau gambar yang di-upload.",
+    category: "layout",
     enabled: false,
   },
   {
     type: "divider",
     label: "Divider",
     description: "Garis horizontal/vertikal untuk pemisah.",
+    category: "layout",
     enabled: false,
   },
   {
     type: "spacer",
     label: "Spacer",
     description: "Spacing kosong untuk layout.",
+    category: "layout",
     enabled: false,
   },
+  // Data
+  {
+    type: "kpi_card",
+    label: "KPI Card",
+    description: "Single metric value + delta vs periode sebelumnya.",
+    category: "data",
+    enabled: true,
+  },
+  {
+    type: "line_chart",
+    label: "Line Chart",
+    description: "Trend 6 minggu / 6 bulan dari satu metric.",
+    category: "data",
+    enabled: true,
+  },
+  {
+    type: "bar_chart",
+    label: "Bar Chart",
+    description: "Bar grouped — actual vs target / vs previous.",
+    category: "data",
+    enabled: false,
+  },
+  {
+    type: "table",
+    label: "Table",
+    description: "Top N rows by metric (campaigns, pages, dst).",
+    category: "data",
+    enabled: false,
+  },
+  // AI
   {
     type: "ai_narrative",
     label: "AI Insight",
     description: "Commentary auto-generate oleh Claude.",
+    category: "ai",
     enabled: false,
   },
 ];
+
+export const WIDGET_CATEGORY_LABELS: Record<WidgetCategory, string> = {
+  layout: "Layout",
+  data: "Data",
+  ai: "AI",
+};
 
 const DEFAULT_POSITIONS: Record<WidgetType, Widget["position"]> = {
   text: { x: 1, y: 1, w: 6, h: 0.6 },

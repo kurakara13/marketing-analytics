@@ -111,8 +111,14 @@ export function SlideCanvas({
         ))}
 
         {slide.widgets.length === 0 ? (
-          <div className="text-muted-foreground pointer-events-none absolute inset-0 flex items-center justify-center text-sm">
-            Slide kosong — tambah widget dari panel kanan.
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-center">
+            <div className="text-muted-foreground text-base font-medium">
+              Slide kosong
+            </div>
+            <p className="text-muted-foreground/80 max-w-sm text-xs">
+              Tambah widget dari panel kanan — text, KPI card, atau line
+              chart. Drag di canvas untuk reposition.
+            </p>
           </div>
         ) : null}
 
@@ -208,9 +214,10 @@ function CanvasWidget({
       dragGrid={[snapPx, snapPx]}
       resizeGrid={[snapPx, snapPx]}
       className={cn(
-        "outline-2 outline-offset-2",
-        isSelected ? "outline-primary" : "outline-transparent",
-        "[&:hover]:outline-primary/40",
+        "outline outline-2 outline-offset-2 transition-[outline-color] duration-150",
+        isSelected
+          ? "outline-primary"
+          : "outline-transparent hover:outline-primary/30",
       )}
       onClick={(e: React.MouseEvent) => {
         e.stopPropagation();

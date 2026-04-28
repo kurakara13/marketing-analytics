@@ -1,18 +1,26 @@
 "use client";
 
-import { useCallback, useMemo, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import Link from "next/link";
-import { ArrowLeft, Download, Loader2, Save } from "lucide-react";
+import { ArrowLeft, Download } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { saveTemplateAction } from "@/app/(dashboard)/reports/actions";
 import {
   createBlankTemplateDefinition,
   type TemplateDefinition,
   type Widget,
 } from "@/lib/reports/templates/types";
+import { cn } from "@/lib/utils";
+import { SaveStatus, type SaveState } from "./save-status";
 import { SlideList } from "./slide-list";
 import { SlideCanvas } from "./slide-canvas";
 import { WidgetSidePanel } from "./widget-side-panel";
@@ -23,6 +31,8 @@ type Props = {
   initialDescription: string | null;
   initialDefinition: TemplateDefinition;
 };
+
+const AUTOSAVE_DEBOUNCE_MS = 1500;
 
 export function TemplateEditor({
   templateId,
@@ -43,6 +53,7 @@ export function TemplateEditor({
   const [selectedWidgetId, setSelectedWidgetId] = useState<string | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [isSaving, startSaving] = useTransition();
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
 
   const selectedSlide = useMemo(
     () => definition.slides.find((s) => s.id === selectedSlideId) ?? null,
@@ -52,6 +63,12 @@ export function TemplateEditor({
     if (!selectedSlide || !selectedWidgetId) return null;
     return selectedSlide.widgets.find((w) => w.id === selectedWidgetId) ?? null;
   }, [selectedSlide, selectedWidgetId]);
+
+  const saveState: SaveState = isSaving
+    ? "saving"
+    : isDirty
+      ? "dirty"
+      : "clean";
 
   // ─── Mutations ────────────────────────────────────────────────────────
   const updateDefinition = useCallback(
@@ -111,6 +128,23 @@ export function TemplateEditor({
     [updateDefinition],
   );
 
+  const handleReorderSlides = useCallback(
+    (fromId: string, toId: string) => {
+      updateDefinition((d) => {
+        const fromIndex = d.slides.findIndex((s) => s.id === fromId);
+        const toIndex = d.slides.findIndex((s) => s.id === toId);
+        if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) {
+          return d;
+        }
+        const next = [...d.slides];
+        const [moved] = next.splice(fromIndex, 1);
+        next.splice(toIndex, 0, moved);
+        return { ...d, slides: next };
+      });
+    },
+    [updateDefinition],
+  );
+
   const handleAddWidget = useCallback(
     (widget: Widget) => {
       if (!selectedSlide) return;
@@ -163,12 +197,16 @@ export function TemplateEditor({
     [selectedSlide, updateDefinition],
   );
 
-  // ─── Save / Generate ──────────────────────────────────────────────────
+  // ─── Save ─────────────────────────────────────────────────────────────
+  // Wrap save in a stable ref so the autosave effect can call it without
+  // including it in deps (which would re-trigger on every state change).
+  const handleSaveRef = useRef<() => void>(() => {});
   const handleSave = useCallback(() => {
+    if (isSaving) return;
     startSaving(async () => {
       const result = await saveTemplateAction({
         templateId,
-        name: name.trim() || "Untitled template",
+        name: name.trim() || "Untitled report",
         description: description.trim() || null,
         definition,
       });
@@ -176,76 +214,137 @@ export function TemplateEditor({
         toast.error(`Save gagal: ${result.error}`);
         return;
       }
-      toast.success("Template tersimpan.");
       setIsDirty(false);
+      setLastSavedAt(new Date());
     });
-  }, [templateId, name, description, definition]);
+  }, [isSaving, templateId, name, description, definition]);
+  handleSaveRef.current = handleSave;
 
+  // ─── Auto-save ────────────────────────────────────────────────────────
+  // Debounced: each edit resets a 1.5s timer; when it fires we flush.
+  // The timer is cleared if the component unmounts or the user keeps
+  // editing. Manual save (Cmd+S) bypasses the debounce.
+  useEffect(() => {
+    if (!isDirty) return;
+    const id = window.setTimeout(() => {
+      handleSaveRef.current();
+    }, AUTOSAVE_DEBOUNCE_MS);
+    return () => window.clearTimeout(id);
+  }, [isDirty, name, description, definition]);
+
+  // ─── Generate ─────────────────────────────────────────────────────────
   const handleGenerate = useCallback(() => {
     if (isDirty) {
-      toast.warning("Save dulu sebelum generate.");
+      // Force-flush before generating, so the .pptx reflects the latest
+      // edit. Side-effect: handleSave is async so we just kick it and
+      // let the user retry. In practice autosave debounce is short
+      // enough that this rarely matters.
+      handleSave();
+      toast.info("Tunggu auto-save selesai sebelum generate.");
       return;
     }
     window.location.href = `/api/reports/${templateId}/generate`;
-  }, [isDirty, templateId]);
+  }, [isDirty, templateId, handleSave]);
+
+  // ─── Keyboard shortcuts ───────────────────────────────────────────────
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      const isTyping =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable);
+
+      // Cmd+S / Ctrl+S — manual save (works even while typing).
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        handleSaveRef.current();
+        return;
+      }
+
+      // The rest only when not typing in an input.
+      if (isTyping) return;
+
+      // Esc — deselect widget
+      if (e.key === "Escape" && selectedWidgetId) {
+        setSelectedWidgetId(null);
+        return;
+      }
+
+      // Delete / Backspace — delete selected widget
+      if (
+        (e.key === "Delete" || e.key === "Backspace") &&
+        selectedWidgetId
+      ) {
+        e.preventDefault();
+        handleDeleteWidget(selectedWidgetId);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedWidgetId, handleDeleteWidget]);
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col gap-3">
-      {/* Header / toolbar */}
-      <div className="flex flex-wrap items-center gap-3 border-b pb-3">
+      {/* Toolbar */}
+      <header className="flex items-center gap-3 border-b pb-3">
         <Link
           href="/reports"
-          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-sm"
+          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm transition-colors hover:bg-muted"
         >
           <ArrowLeft className="size-4" />
           Reports
         </Link>
-        <Input
-          value={name}
-          onChange={(e) => {
-            setName(e.target.value);
-            setIsDirty(true);
-          }}
-          placeholder="Nama report"
-          className="max-w-xs"
-        />
-        <Input
-          value={description}
-          onChange={(e) => {
-            setDescription(e.target.value);
-            setIsDirty(true);
-          }}
-          placeholder="Deskripsi (opsional)"
-          className="max-w-md"
-        />
-        <div className="ml-auto flex items-center gap-2">
-          {isDirty ? (
-            <span className="text-muted-foreground text-xs">
-              Ada perubahan belum disimpan
-            </span>
-          ) : null}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleGenerate}
-            disabled={isSaving || isDirty}
-          >
-            <Download className="size-4" />
-            Generate .pptx
-          </Button>
-          <Button type="button" onClick={handleSave} disabled={isSaving}>
-            {isSaving ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Save className="size-4" />
+
+        <div className="flex min-w-0 flex-1 flex-col gap-0">
+          <input
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value);
+              setIsDirty(true);
+            }}
+            placeholder="Untitled report"
+            aria-label="Report name"
+            className={cn(
+              "bg-transparent border-none text-base font-semibold outline-none",
+              "rounded-md px-1.5 py-0.5",
+              "focus:bg-muted",
+              "placeholder:text-muted-foreground/60",
             )}
-            Save
-          </Button>
+          />
+          <input
+            value={description}
+            onChange={(e) => {
+              setDescription(e.target.value);
+              setIsDirty(true);
+            }}
+            placeholder="Tambah deskripsi…"
+            aria-label="Description"
+            className={cn(
+              "text-muted-foreground bg-transparent border-none text-xs outline-none",
+              "rounded-md px-1.5 py-0.5",
+              "focus:bg-muted",
+              "placeholder:text-muted-foreground/50",
+            )}
+          />
         </div>
-      </div>
+
+        <SaveStatus state={saveState} lastSavedAt={lastSavedAt} />
+
+        <Button
+          type="button"
+          variant="default"
+          onClick={handleGenerate}
+          disabled={isSaving}
+        >
+          <Download className="size-4" />
+          Generate .pptx
+        </Button>
+      </header>
 
       {/* 3-panel layout */}
-      <div className="grid min-h-0 flex-1 grid-cols-[220px_1fr_320px] gap-3">
+      <div className="grid min-h-0 flex-1 grid-cols-[240px_1fr_340px] gap-3">
         <SlideList
           slides={definition.slides}
           selectedSlideId={selectedSlideId}
@@ -256,6 +355,7 @@ export function TemplateEditor({
           onAdd={handleAddSlide}
           onDelete={handleDeleteSlide}
           onRename={handleRenameSlide}
+          onReorder={handleReorderSlides}
         />
         <SlideCanvas
           slide={selectedSlide}
