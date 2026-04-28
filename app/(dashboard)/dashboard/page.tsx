@@ -12,6 +12,8 @@ import {
 
 import { auth } from "@/lib/auth";
 import { getCampaignBreakdown, getMetricsSummary } from "@/lib/metrics-queries";
+import { getOnboardingSteps } from "@/lib/onboarding";
+import { OnboardingChecklist } from "@/components/onboarding/onboarding-checklist";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -45,42 +47,17 @@ export default async function DashboardPage({
   const windowDays = parseDaysParam(params?.days);
 
   const greetingName = session.user.name ?? session.user.email ?? "";
-  const [summary, campaignRows] = await Promise.all([
+  const [summary, campaignRows, onboardingSteps] = await Promise.all([
     getMetricsSummary({ userId: session.user.id, days: windowDays }),
     getCampaignBreakdown({ userId: session.user.id, days: windowDays }),
+    getOnboardingSteps(session.user.id),
   ]);
+  const onboardingComplete = onboardingSteps.every((s) => s.done);
 
   if (summary.connectedSources === 0) {
-    return (
-      <div className="flex flex-col gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Selamat datang{greetingName ? `, ${greetingName}` : ""}.
-          </h1>
-          <p className="text-muted-foreground text-sm">
-            Hubungkan data source pertama untuk mulai melihat metrik.
-          </p>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Belum ada koneksi</CardTitle>
-            <CardDescription>
-              Konek Google Analytics 4 atau Google Ads untuk mengisi dashboard
-              ini.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link
-              href="/data-sources"
-              className={cn(buttonVariants({ variant: "default" }))}
-            >
-              Buka Data Sources
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
-    );
+    // Brand-new user — show the full onboarding hero instead of the
+    // generic "no connection" empty state.
+    return <OnboardingChecklist steps={onboardingSteps} variant="full" />;
   }
 
   if (!summary.hasData) {
@@ -154,6 +131,10 @@ export default async function DashboardPage({
           </a>
         </div>
       </div>
+
+      {!onboardingComplete ? (
+        <OnboardingChecklist steps={onboardingSteps} variant="compact" />
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard

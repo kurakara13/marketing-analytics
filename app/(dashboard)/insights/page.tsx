@@ -4,6 +4,7 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { listInsightsForUser } from "@/lib/ai/insights";
 import { getFeedbackForInsight } from "@/lib/insight-feedback";
+import { listConnectionsForUser } from "@/lib/connections";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -46,23 +47,7 @@ export default async function InsightsPage() {
       </div>
 
       {insights.length === 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Belum ada insight</CardTitle>
-            <CardDescription>
-              Pastikan ada koneksi data source yang sudah tersinkron, lalu klik{" "}
-              <strong>Generate insight</strong>. Generate butuh ~10–30 detik.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link
-              href="/data-sources"
-              className={cn(buttonVariants({ variant: "outline" }))}
-            >
-              Buka Data Sources
-            </Link>
-          </CardContent>
-        </Card>
+        <InsightsEmptyState userId={userId} />
       ) : (
         <div className="grid gap-4">
           {insights.map((insight, idx) => {
@@ -82,5 +67,60 @@ export default async function InsightsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Empty state ────────────────────────────────────────────────────
+//
+// Branches on whether the user has connections yet:
+// - No connections → "Connect data first" with link to /data-sources.
+// - Has connections → "Generate first insight" with the actual generate
+//   button so they can fire it without leaving the page.
+async function InsightsEmptyState({ userId }: { userId: string }) {
+  const connections = await listConnectionsForUser(userId);
+  const realConnections = connections.filter(
+    (c) => !c.externalAccountId.startsWith("_pending_"),
+  );
+  const hasConnection = realConnections.length > 0;
+
+  if (!hasConnection) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Belum ada koneksi data source</CardTitle>
+          <CardDescription>
+            Hubungkan Google Analytics 4 atau Google Ads dulu — AI butuh data
+            untuk menganalisis. Setelah connect & sync, kembali ke sini dan
+            klik <strong>Generate insight</strong>.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Link
+            href="/data-sources"
+            className={cn(buttonVariants({ variant: "default" }))}
+          >
+            Connect data source
+          </Link>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Belum ada insight — yuk generate yang pertama</CardTitle>
+        <CardDescription>
+          Anda sudah punya {realConnections.length} koneksi aktif. Klik tombol{" "}
+          <strong>Generate insight</strong> di kanan atas — AI akan analyze
+          data 7 hari terakhir Anda dan keluarkan ringkasan, observation, dan
+          rekomendasi. Butuh ~10–30 detik. Pertimbangkan setting{" "}
+          <Link href="/settings" className="underline underline-offset-4">
+            konteks bisnis
+          </Link>{" "}
+          dulu agar insight lebih relevan.
+        </CardDescription>
+      </CardHeader>
+    </Card>
   );
 }
