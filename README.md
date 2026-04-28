@@ -64,7 +64,7 @@ source is a folder + a registry entry.
   connection and metric row is scoped to a user_id; users cannot see each
   other's data
 - No data resale, syndication, or third-party sharing of API responses
-- Optional AI insights (Anthropic Claude) operate only on
+- Optional AI insights (OpenAI GPT-5) operate only on
   post-aggregation summary metrics — raw API responses are never sent
   to external services
 
@@ -80,7 +80,7 @@ source is a folder + a registry entry.
 | Charts          | Recharts                                    |
 | Forms           | react-hook-form + Zod                       |
 | Cron            | node-cron (separate worker process)         |
-| AI (optional)   | `@anthropic-ai/sdk` — Claude Opus 4.7       |
+| AI (optional)   | `openai` SDK — GPT-5 (structured outputs)   |
 | Package manager | pnpm                                        |
 | Deployment      | Self-hosted (PM2 + Caddy/Nginx on Ubuntu)   |
 
@@ -140,7 +140,7 @@ lib/
 ├── connections.ts           DB ops for `connection` rows
 ├── crypto.ts                AES-256-GCM helper for token encryption
 ├── sync.ts                  syncConnection orchestrator
-├── ai/                      Anthropic Claude integration (optional)
+├── ai/                      OpenAI GPT-5 insight engine (optional)
 └── metrics-queries.ts       Aggregations powering the dashboard
 
 scripts/
