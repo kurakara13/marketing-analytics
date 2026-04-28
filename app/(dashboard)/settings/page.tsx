@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { monthlyTargets } from "@/lib/db/schema";
+import { getBusinessContext } from "@/lib/business-context";
 import {
   Card,
   CardContent,
@@ -12,20 +13,24 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { MonthlyTargetsForm } from "@/components/settings/monthly-targets-form";
+import { BusinessContextForm } from "@/components/settings/business-context-form";
 
 export default async function SettingsPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const targets = await db
-    .select({
-      year: monthlyTargets.year,
-      month: monthlyTargets.month,
-      metric: monthlyTargets.metric,
-      value: monthlyTargets.value,
-    })
-    .from(monthlyTargets)
-    .where(eq(monthlyTargets.userId, session.user.id));
+  const [targets, businessContext] = await Promise.all([
+    db
+      .select({
+        year: monthlyTargets.year,
+        month: monthlyTargets.month,
+        metric: monthlyTargets.metric,
+        value: monthlyTargets.value,
+      })
+      .from(monthlyTargets)
+      .where(eq(monthlyTargets.userId, session.user.id)),
+    getBusinessContext(session.user.id),
+  ]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -50,6 +55,33 @@ export default async function SettingsPage() {
             <span className="text-muted-foreground">Email</span>
             <span>{session?.user?.email ?? "—"}</span>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Konteks bisnis</CardTitle>
+          <CardDescription>
+            Disuntikkan ke prompt AI insights agar observation & rekomendasi
+            relevan ke industri & target audience Anda. Semua opsional —
+            kosongkan kalau tidak relevan. Berlaku untuk insight yang
+            di-generate setelah simpan.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <BusinessContextForm
+            initial={
+              businessContext
+                ? {
+                    industry: businessContext.industry,
+                    targetAudience: businessContext.targetAudience,
+                    brandVoice: businessContext.brandVoice,
+                    businessGoals: businessContext.businessGoals,
+                    leadEventName: businessContext.leadEventName,
+                  }
+                : null
+            }
+          />
         </CardContent>
       </Card>
 

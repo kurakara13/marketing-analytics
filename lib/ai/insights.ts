@@ -4,6 +4,8 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { insights, type Insight } from "@/lib/db/schema";
 import type { ReportData } from "@/lib/reports/fetch-report-data";
+import { getBusinessContext } from "@/lib/business-context";
+import type { UserBusinessContext } from "@/lib/db/schema";
 import { INSIGHTS_SYSTEM_PROMPT } from "./prompts";
 
 // Provider: OpenAI. We picked GPT-5 over Claude / Gemini for the
@@ -123,7 +125,36 @@ function fmtDelta(current: number, previous: number): string {
 // Sections are conditional — we only include data the user has
 // connected. Skipped sections are tagged "(belum tersedia)" so the
 // model doesn't hallucinate numbers for missing sources.
-function buildUserPrompt(reportData: ReportData): string {
+function buildBusinessContextBlock(
+  ctx: UserBusinessContext | null,
+): string {
+  if (!ctx) return "";
+  const lines: string[] = [];
+  if (ctx.industry) lines.push(`- Industri / model bisnis: ${ctx.industry}`);
+  if (ctx.targetAudience) lines.push(`- Target audience: ${ctx.targetAudience}`);
+  if (ctx.businessGoals) lines.push(`- Business goals: ${ctx.businessGoals}`);
+  if (ctx.brandVoice) {
+    const voiceLabel =
+      ctx.brandVoice === "professional"
+        ? "profesional & formal"
+        : ctx.brandVoice === "casual"
+          ? "casual & friendly"
+          : "teknis & data-heavy";
+    lines.push(`- Tone narrative yang diharapkan: ${voiceLabel}`);
+  }
+  if (ctx.leadEventName) {
+    lines.push(
+      `- Definisi "lead" untuk bisnis ini: GA4 event "${ctx.leadEventName}". Pakai istilah "lead" konsisten ketika merujuk ke event ini di observation/recommendation.`,
+    );
+  }
+  if (lines.length === 0) return "";
+  return `## Konteks bisnis user\n${lines.join("\n")}\n\nGunakan konteks di atas untuk merangkai observation & recommendation yang relevan dengan industri & target audience ini. Jangan generic.\n\n`;
+}
+
+function buildUserPrompt(
+  reportData: ReportData,
+  businessContext: UserBusinessContext | null,
+): string {
   const { totals, previousTotals, trend, campaigns, connectedSources } =
     reportData;
 
@@ -250,7 +281,7 @@ function buildUserPrompt(reportData: ReportData): string {
 
   return `Analisis data marketing berikut dan kembalikan insight dalam JSON terstruktur.
 
-## Periode laporan
+${buildBusinessContextBlock(businessContext)}## Periode laporan
 ${reportData.windowLabel} (${reportData.windowStart} → ${reportData.windowEnd})
 Type: ${reportData.period}
 
@@ -299,7 +330,8 @@ export async function generateInsight(args: {
     );
   }
 
-  const userPrompt = buildUserPrompt(reportData);
+  const businessContext = await getBusinessContext(userId);
+  const userPrompt = buildUserPrompt(reportData, businessContext);
 
   const client = getClient();
   const response = await client.chat.completions.create({

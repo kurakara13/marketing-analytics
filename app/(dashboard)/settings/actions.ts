@@ -7,6 +7,7 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { monthlyTargets } from "@/lib/db/schema";
+import { upsertBusinessContext } from "@/lib/business-context";
 
 const targetInput = z.object({
   year: z.number().int().min(2020).max(2100),
@@ -86,6 +87,49 @@ export async function deleteMonthlyTargetAction(
         eq(monthlyTargets.metric, parsed.data.metric),
       ),
     );
+
+  revalidatePath("/settings");
+  return { success: true };
+}
+
+// ─── Business context ───────────────────────────────────────────────────
+const businessContextInput = z.object({
+  industry: z.string().trim().max(500).optional().nullable(),
+  targetAudience: z.string().trim().max(500).optional().nullable(),
+  brandVoice: z.enum(["professional", "casual", "technical"]).nullable(),
+  businessGoals: z.string().trim().max(1000).optional().nullable(),
+  leadEventName: z.string().trim().max(100).optional().nullable(),
+});
+
+export type SaveBusinessContextResult =
+  | { error: string }
+  | { success: true };
+
+export async function saveBusinessContextAction(
+  input: z.infer<typeof businessContextInput>,
+): Promise<SaveBusinessContextResult> {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return { error: "Tidak ada session aktif" };
+  }
+
+  const parsed = businessContextInput.safeParse(input);
+  if (!parsed.success) {
+    return { error: "Input tidak valid" };
+  }
+
+  // Empty strings → null so we don't clutter the prompt with empty lines.
+  const blank = (s: string | null | undefined) =>
+    s && s.trim().length > 0 ? s.trim() : null;
+
+  await upsertBusinessContext({
+    userId: session.user.id,
+    industry: blank(parsed.data.industry),
+    targetAudience: blank(parsed.data.targetAudience),
+    brandVoice: parsed.data.brandVoice ?? null,
+    businessGoals: blank(parsed.data.businessGoals),
+    leadEventName: blank(parsed.data.leadEventName),
+  });
 
   revalidatePath("/settings");
   return { success: true };
