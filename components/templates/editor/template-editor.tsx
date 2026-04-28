@@ -103,6 +103,7 @@ export function TemplateEditor({
           name: `Slide ${d.slides.length + 1}`,
           background: "F8FAFC",
           backgroundImage: null,
+          periodOverride: null,
           widgets: [],
         },
       ],

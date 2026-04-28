@@ -1,6 +1,7 @@
 import PptxGenJS from "pptxgenjs";
 
 import type { ReportData } from "@/lib/reports/fetch-report-data";
+import { fetchReportData } from "@/lib/reports/fetch-report-data";
 // Import from the widgets barrel — that file performs the side-effect
 // registrations of every widget type, so by the time we reach the
 // renderer the registry is fully populated.
@@ -17,6 +18,12 @@ import type { TemplateDefinition } from "./types";
 // the client. Widgets render into pptxgenjs slide via the registered
 // definition.
 //
+// Per-slide period override: the template carries a base ReportData
+// (from the page-level anchor); slides that set periodOverride get
+// their own ReportData lazily-fetched and cached for the duration of
+// this render. This is what makes "monthly exec slide + weekly detail
+// slide in one .pptx" possible.
+//
 // Unknown widget types are skipped with a console warning rather than
 // throwing — keeps the report usable when an old template references
 // a widget type that's been removed in a newer build.
@@ -31,15 +38,42 @@ export async function renderTemplate(args: {
   pres.author = "Marketing Analytics Platform";
   pres.company = "Marketing Analytics";
 
-  const context: RenderContext = {
-    userId: args.userId,
-    templateId: args.template.id,
-    reportData: args.reportData,
-    generatedAt: new Date().toISOString(),
-  };
+  // Cache ReportData per period so slides with the same override
+  // share one fetch. Default ("inherit") uses args.reportData as-is.
+  const reportDataByPeriod = new Map<string, ReportData>();
+  reportDataByPeriod.set(args.reportData.period, args.reportData);
+
+  const generatedAt = new Date().toISOString();
 
   for (const slideDef of args.template.definition.slides) {
     const slide = pres.addSlide();
+
+    // Resolve which ReportData this slide should render against.
+    // Inherit (no override) → the template-level reportData.
+    // Override "weekly"/"monthly" → fetch separately, cache for re-use.
+    const targetPeriod = slideDef.periodOverride ?? args.reportData.period;
+    let slideReportData = reportDataByPeriod.get(targetPeriod);
+    if (!slideReportData) {
+      try {
+        slideReportData = await fetchReportData({
+          userId: args.userId,
+          period: targetPeriod,
+        });
+        reportDataByPeriod.set(targetPeriod, slideReportData);
+      } catch (err) {
+        console.error(
+          `[renderTemplate] Slide ${slideDef.id}: fetch ${targetPeriod} ReportData gagal, fallback ke template-level:`,
+          err,
+        );
+        slideReportData = args.reportData;
+      }
+    }
+    const context: RenderContext = {
+      userId: args.userId,
+      templateId: args.template.id,
+      reportData: slideReportData,
+      generatedAt,
+    };
 
     // Background — image overrides flat color. We always set the
     // color first as a fallback in case the image fails to load

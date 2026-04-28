@@ -311,6 +311,12 @@ export const slideSchema = z.object({
    *  When set, overrides the flat color. Path relative to the
    *  uploads root (same shape as image widget config). */
   backgroundImage: z.string().nullable().default(null),
+  /** Optional per-slide period override. When set, this slide's
+   *  data-driven widgets fetch ReportData for the named period instead
+   *  of the template-level anchor. Lets a single template mix monthly
+   *  exec slides with weekly detail slides in one .pptx. Null =
+   *  inherit template settings. */
+  periodOverride: z.enum(["weekly", "monthly"]).nullable().default(null),
   widgets: z.array(widgetSchema).default([]),
 });
 export type Slide = z.infer<typeof slideSchema>;
@@ -363,6 +369,7 @@ export function createBlankTemplateDefinition(): TemplateDefinition {
         name: "Slide 1",
         background: "F8FAFC",
         backgroundImage: null,
+        periodOverride: null,
         widgets: [],
       },
     ],

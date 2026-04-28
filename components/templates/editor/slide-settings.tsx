@@ -1,9 +1,16 @@
 "use client";
 
 import { motion } from "motion/react";
-import { Palette } from "lucide-react";
+import { CalendarRange, Palette } from "lucide-react";
 
 import type { Slide } from "@/lib/reports/templates/types";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ImageUploadField } from "./image-upload-field";
 
 type Props = {
@@ -58,6 +65,35 @@ export function SlideSettings({ slide, onUpdate }: Props) {
         <p className="text-muted-foreground text-[10px]">
           Optional — kalau di-upload, akan jadi background full-bleed
           slide ini saja (cover fit, ter-crop kalau aspect ratio beda).
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-1.5">
+          <CalendarRange className="text-muted-foreground size-3.5" />
+          <label className="text-xs font-medium">Period override</label>
+        </div>
+        <Select
+          value={slide.periodOverride ?? "_inherit"}
+          onValueChange={(v) =>
+            onUpdate({
+              periodOverride:
+                v === "_inherit" ? null : (v as "weekly" | "monthly"),
+            })
+          }
+        >
+          <SelectTrigger className="h-8 text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="_inherit">Inherit dari template</SelectItem>
+            <SelectItem value="weekly">Weekly (7 hari)</SelectItem>
+            <SelectItem value="monthly">Monthly (calendar bulan)</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-muted-foreground text-[10px]">
+          Override periode untuk slide ini saja — bikin laporan satu PPT
+          yang campur slide weekly + monthly. Default = ikut template.
         </p>
       </div>
     </motion.section>
