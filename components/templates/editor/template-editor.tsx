@@ -286,16 +286,21 @@ export function TemplateEditor({
   }, [selectedWidgetId, handleDeleteWidget]);
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col gap-3">
+    <div className="flex h-full min-h-0 flex-1 flex-col gap-4">
       {/* Toolbar */}
-      <header className="flex items-center gap-3 border-b pb-3">
+      <header className="flex items-center gap-3 px-1">
         <Link
           href="/reports"
-          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm transition-colors hover:bg-muted"
+          className={cn(
+            "text-muted-foreground hover:text-foreground hover:bg-accent",
+            "inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors",
+          )}
         >
           <ArrowLeft className="size-4" />
           Reports
         </Link>
+
+        <div className="bg-border h-5 w-px shrink-0" aria-hidden />
 
         <div className="flex min-w-0 flex-1 flex-col gap-0">
           <input
@@ -307,10 +312,10 @@ export function TemplateEditor({
             placeholder="Untitled report"
             aria-label="Report name"
             className={cn(
-              "bg-transparent border-none text-base font-semibold outline-none",
-              "rounded-md px-1.5 py-0.5",
-              "focus:bg-muted",
-              "placeholder:text-muted-foreground/60",
+              "bg-transparent border-none text-base font-semibold outline-none tracking-tight",
+              "rounded-md px-1.5 py-0.5 transition-colors",
+              "hover:bg-muted/50 focus:bg-muted",
+              "placeholder:text-muted-foreground/50",
             )}
           />
           <input
@@ -323,8 +328,8 @@ export function TemplateEditor({
             aria-label="Description"
             className={cn(
               "text-muted-foreground bg-transparent border-none text-xs outline-none",
-              "rounded-md px-1.5 py-0.5",
-              "focus:bg-muted",
+              "rounded-md px-1.5 py-0.5 transition-colors",
+              "hover:bg-muted/50 focus:bg-muted",
               "placeholder:text-muted-foreground/50",
             )}
           />
@@ -337,6 +342,7 @@ export function TemplateEditor({
           variant="default"
           onClick={handleGenerate}
           disabled={isSaving}
+          className="rounded-lg shadow-sm"
         >
           <Download className="size-4" />
           Generate .pptx
@@ -344,7 +350,7 @@ export function TemplateEditor({
       </header>
 
       {/* 3-panel layout */}
-      <div className="grid min-h-0 flex-1 grid-cols-[240px_1fr_340px] gap-3">
+      <div className="grid min-h-0 flex-1 grid-cols-[240px_1fr_340px] gap-4">
         <SlideList
           slides={definition.slides}
           selectedSlideId={selectedSlideId}

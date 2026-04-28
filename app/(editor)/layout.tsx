@@ -14,8 +14,8 @@ export default async function EditorLayout({
   if (!session?.user) redirect("/login");
 
   return (
-    <div className="flex min-h-screen flex-1 flex-col">
-      <main className="flex flex-1 flex-col overflow-hidden p-3 md:p-4">
+    <div className="bg-muted/20 flex min-h-screen flex-1 flex-col">
+      <main className="flex flex-1 flex-col overflow-hidden p-4 md:p-5">
         {children}
       </main>
     </div>

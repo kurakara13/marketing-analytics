@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import {
   DndContext,
   closestCenter,
@@ -33,6 +34,8 @@ type Props = {
   onReorder: (fromId: string, toId: string) => void;
 };
 
+const SPRING = { type: "spring", stiffness: 380, damping: 32 } as const;
+
 export function SlideList({
   slides,
   selectedSlideId,
@@ -60,12 +63,14 @@ export function SlideList({
   }
 
   return (
-    <div className="bg-muted/30 flex min-h-0 flex-col overflow-hidden rounded-lg border">
-      <div className="flex items-center justify-between border-b bg-background/40 px-3 py-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Slides
-        </span>
-        <span className="text-muted-foreground text-xs tabular-nums">
+    <div className="bg-card flex min-h-0 flex-col overflow-hidden rounded-xl border border-border/60 shadow-sm">
+      <div className="bg-muted/30 flex items-center justify-between border-b border-border/60 px-4 py-3">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+            Slides
+          </span>
+        </div>
+        <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-[10px] font-medium tabular-nums">
           {slides.length}
         </span>
       </div>
@@ -79,24 +84,26 @@ export function SlideList({
           items={slides.map((s) => s.id)}
           strategy={verticalListSortingStrategy}
         >
-          <ul className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
-            {slides.map((slide, idx) => (
-              <SortableSlideItem
-                key={slide.id}
-                slide={slide}
-                index={idx}
-                isSelected={slide.id === selectedSlideId}
-                canDelete={slides.length > 1}
-                onSelect={() => onSelect(slide.id)}
-                onDelete={() => onDelete(slide.id)}
-                onRename={(name) => onRename(slide.id, name)}
-              />
-            ))}
+          <ul className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto p-3">
+            <AnimatePresence initial={false}>
+              {slides.map((slide, idx) => (
+                <SortableSlideItem
+                  key={slide.id}
+                  slide={slide}
+                  index={idx}
+                  isSelected={slide.id === selectedSlideId}
+                  canDelete={slides.length > 1}
+                  onSelect={() => onSelect(slide.id)}
+                  onDelete={() => onDelete(slide.id)}
+                  onRename={(name) => onRename(slide.id, name)}
+                />
+              ))}
+            </AnimatePresence>
           </ul>
         </SortableContext>
       </DndContext>
 
-      <div className="border-t bg-background/40 p-2">
+      <div className="bg-muted/30 border-t border-border/60 p-3">
         <Button
           type="button"
           variant="outline"
@@ -142,7 +149,9 @@ function SortableSlideItem({
   const [isRenaming, setIsRenaming] = useState(false);
   const [draftName, setDraftName] = useState(slide.name);
 
-  const style = {
+  // Combine dnd-kit's CSS transform with our own enter/exit animation
+  // via motion. dnd-kit handles drag state; motion handles add/remove.
+  const dndStyle = {
     transform: CSS.Transform.toString(transform),
     transition,
   };
@@ -158,15 +167,20 @@ function SortableSlideItem({
   }
 
   return (
-    <li
+    <motion.li
       ref={setNodeRef}
-      style={style}
+      style={dndStyle}
+      layout
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: isDragging ? 0.4 : 1, y: 0 }}
+      exit={{ opacity: 0, y: -6 }}
+      transition={{ duration: 0.18, ease: "easeOut" }}
       className={cn(
-        "group relative flex items-stretch gap-1 rounded-md border text-sm transition-all",
+        "group relative flex items-stretch gap-1 rounded-lg border text-sm",
+        "transition-[background-color,border-color,box-shadow] duration-150",
         isSelected
-          ? "border-primary bg-background shadow-sm"
-          : "border-transparent hover:bg-background/70",
-        isDragging && "opacity-50",
+          ? "border-primary/40 bg-accent shadow-sm ring-1 ring-primary/15"
+          : "border-transparent hover:bg-accent/60",
       )}
     >
       <button
@@ -175,7 +189,7 @@ function SortableSlideItem({
         {...listeners}
         aria-label="Drag to reorder"
         className={cn(
-          "text-muted-foreground/50 hover:text-muted-foreground flex w-5 cursor-grab items-center justify-center rounded-l-md transition-colors active:cursor-grabbing",
+          "text-muted-foreground/40 hover:text-muted-foreground flex w-5 cursor-grab items-center justify-center rounded-l-lg transition-opacity active:cursor-grabbing",
           "opacity-0 group-hover:opacity-100",
           isSelected && "opacity-100",
         )}
@@ -187,12 +201,14 @@ function SortableSlideItem({
         type="button"
         onClick={onSelect}
         onDoubleClick={() => setIsRenaming(true)}
-        className="flex flex-1 items-center gap-2.5 rounded-r-md py-2 pr-2 text-left"
+        className="flex flex-1 items-center gap-2.5 rounded-r-lg py-2 pr-2 text-left"
       >
         <span
           className={cn(
-            "text-muted-foreground/70 inline-flex size-6 shrink-0 items-center justify-center rounded text-[10px] font-medium tabular-nums",
-            isSelected && "bg-primary/10 text-primary",
+            "inline-flex size-6 shrink-0 items-center justify-center rounded-md text-[10px] font-semibold tabular-nums transition-colors",
+            isSelected
+              ? "bg-primary text-primary-foreground"
+              : "bg-muted text-muted-foreground/80",
           )}
         >
           {index + 1}
@@ -212,12 +228,14 @@ function SortableSlideItem({
                 }
               }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full rounded bg-background px-1 py-0.5 text-xs outline-none ring-1 ring-primary"
+              className="w-full rounded-md bg-background px-1.5 py-0.5 text-xs font-medium outline-none ring-2 ring-primary"
             />
           ) : (
-            <div className="truncate text-xs font-medium">{slide.name}</div>
+            <div className="truncate text-xs font-medium leading-snug">
+              {slide.name}
+            </div>
           )}
-          <div className="text-muted-foreground text-[10px]">
+          <div className="text-muted-foreground text-[10px] leading-tight">
             {slide.widgets.length} widget
             {slide.widgets.length === 1 ? "" : "s"}
           </div>
@@ -225,18 +243,21 @@ function SortableSlideItem({
       </button>
 
       {canDelete ? (
-        <button
+        <motion.button
           type="button"
           onClick={onDelete}
           aria-label={`Hapus ${slide.name}`}
+          whileHover={{ scale: 1.06 }}
+          whileTap={{ scale: 0.92 }}
+          transition={SPRING}
           className={cn(
-            "text-muted-foreground hover:text-destructive flex w-7 items-center justify-center rounded-r-md transition-colors",
+            "text-muted-foreground/60 hover:text-destructive flex w-7 items-center justify-center rounded-r-lg transition-[color,opacity]",
             "opacity-0 group-hover:opacity-100",
           )}
         >
           <Trash2 className="size-3.5" />
-        </button>
+        </motion.button>
       ) : null}
-    </li>
+    </motion.li>
   );
 }

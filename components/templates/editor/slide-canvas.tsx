@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { Rnd } from "react-rnd";
 
 import { cn } from "@/lib/utils";
@@ -80,16 +81,22 @@ export function SlideCanvas({
   return (
     <div
       ref={containerRef}
-      className="bg-muted/40 relative flex min-h-0 items-center justify-center overflow-auto rounded-md border p-8"
+      className={cn(
+        "relative flex min-h-0 items-center justify-center overflow-auto rounded-xl border border-border/60 p-10",
+        // Subtle radial backdrop so the canvas pops slightly off the page.
+        "bg-[radial-gradient(circle_at_50%_30%,rgba(15,23,42,0.04),transparent_70%)]",
+      )}
     >
-      <div
-        className="relative shadow-md"
+      <motion.div
+        layout
+        transition={{ duration: 0.25, ease: "easeOut" }}
+        className="relative ring-1 ring-black/5 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.18)]"
         style={{
           width: canvasW,
           height: canvasH,
           backgroundColor: `#${slide.background}`,
           backgroundImage:
-            "linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px)",
+            "linear-gradient(rgba(15,23,42,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(15,23,42,0.04) 1px, transparent 1px)",
           backgroundSize: `${pxPerInch}px ${pxPerInch}px`,
         }}
         onClick={(e) => {
@@ -99,19 +106,26 @@ export function SlideCanvas({
           }
         }}
       >
-        {slide.widgets.map((widget) => (
-          <CanvasWidget
-            key={widget.id}
-            widget={widget}
-            isSelected={widget.id === selectedWidgetId}
-            onSelect={() => onSelectWidget(widget.id)}
-            onUpdate={(updater) => onUpdateWidget(widget.id, updater)}
-            pxPerInch={pxPerInch}
-          />
-        ))}
+        <AnimatePresence>
+          {slide.widgets.map((widget) => (
+            <CanvasWidget
+              key={widget.id}
+              widget={widget}
+              isSelected={widget.id === selectedWidgetId}
+              onSelect={() => onSelectWidget(widget.id)}
+              onUpdate={(updater) => onUpdateWidget(widget.id, updater)}
+              pxPerInch={pxPerInch}
+            />
+          ))}
+        </AnimatePresence>
 
         {slide.widgets.length === 0 ? (
-          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-center">
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+            className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-center"
+          >
             <div className="text-muted-foreground text-base font-medium">
               Slide kosong
             </div>
@@ -119,14 +133,14 @@ export function SlideCanvas({
               Tambah widget dari panel kanan — text, KPI card, atau line
               chart. Drag di canvas untuk reposition.
             </p>
-          </div>
+          </motion.div>
         ) : null}
+      </motion.div>
 
-        {/* Scale indicator (bottom-right corner of canvas) */}
-        <div className="text-muted-foreground absolute -bottom-6 right-0 text-[10px] font-mono">
-          {Math.round(pxPerInch)} px/inch · {Math.round(canvasW)}×
-          {Math.round(canvasH)} px
-        </div>
+      {/* Scale indicator pinned to the canvas container, doesn't scroll */}
+      <div className="text-muted-foreground/70 pointer-events-none absolute bottom-2 right-3 select-none font-mono text-[10px]">
+        {Math.round(pxPerInch)} px/inch · {Math.round(canvasW)}×
+        {Math.round(canvasH)} px
       </div>
     </div>
   );
@@ -224,7 +238,14 @@ function CanvasWidget({
         onSelect();
       }}
     >
-      <CanvasWidgetPreview widget={widget} />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ type: "spring", stiffness: 380, damping: 32 }}
+        className="size-full"
+      >
+        <CanvasWidgetPreview widget={widget} />
+      </motion.div>
     </Rnd>
   );
 }
