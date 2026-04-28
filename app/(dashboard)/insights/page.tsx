@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 
 import { auth } from "@/lib/auth";
-import { listInsightsForUser } from "@/lib/ai/insights";
+import { getUsageStatus, listInsightsForUser } from "@/lib/ai/insights";
 import { getFeedbackForInsight } from "@/lib/insight-feedback";
 import { listConnectionsForUser } from "@/lib/connections";
 import { buttonVariants } from "@/components/ui/button";
@@ -21,12 +21,15 @@ export default async function InsightsPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const insights = await listInsightsForUser(session.user.id);
+  const userId = session.user.id;
+  const [insights, usage] = await Promise.all([
+    listInsightsForUser(userId),
+    getUsageStatus(userId),
+  ]);
 
   // Pull all feedback rows in parallel — one query per insight is fine
   // for the 20-row limit. Switch to a batched IN-list query if list
   // grows beyond ~50.
-  const userId = session.user.id;
   const feedbackPerInsight = await Promise.all(
     insights.map((i) =>
       getFeedbackForInsight({ userId, insightId: i.id }),
@@ -41,6 +44,22 @@ export default async function InsightsPage() {
           <p className="text-muted-foreground text-sm">
             Analisis data marketing Anda dengan AI. Setiap generate
             menghasilkan ringkasan, observasi, dan rekomendasi yang actionable.
+          </p>
+          <p
+            className={cn(
+              "mt-1 text-xs",
+              usage.remaining === 0
+                ? "text-rose-600"
+                : usage.remaining <= 3
+                  ? "text-amber-600"
+                  : "text-muted-foreground/70",
+            )}
+          >
+            Quota hari ini: {usage.used} / {usage.limit} insight (rolling
+            24 jam)
+            {usage.resetsAt
+              ? ` · slot berikutnya tersedia ${usage.resetsAt.toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" })}`
+              : null}
           </p>
         </div>
         <GenerateInsightsButton />

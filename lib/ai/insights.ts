@@ -27,6 +27,15 @@ import { INSIGHTS_SYSTEM_PROMPT } from "./prompts";
 // (Zod schemas, prompt, DB persistence stay).
 const MODEL = "gpt-5";
 
+// Per-user rolling 24h cap on insight generations. Each generate hits
+// GPT-5 and costs real money — this protects against accidental loops
+// (a buggy regenerate retry) and obvious abuse. 30/day = ~1 per
+// 48 minutes, far above any legitimate manual-review pattern.
+//
+// Surfaced to the UI via getUsageStatus() so users see how close they
+// are to the cap before the action fires.
+export const DAILY_INSIGHT_QUOTA = 30;
+
 // Structured output schema enforced by OpenAI's `json_schema` strict
 // mode. Same shape as the prior Claude implementation; OpenAI strict
 // mode is also stricter on schema validation (no `default`, all
@@ -370,6 +379,42 @@ Lakukan analisis sekarang. Cite angka spesifik dari data di atas, hindari generi
 
 // ─── Main entry ─────────────────────────────────────────────────────────
 /**
+ * Returns how many insights the user has generated in the last 24h
+ * and how many remain. Used by the /insights page header to render a
+ * "12/30 today" hint, and by generateInsight as the actual gate.
+ */
+export async function getUsageStatus(userId: string): Promise<{
+  used: number;
+  remaining: number;
+  limit: number;
+  resetsAt: Date | null;
+}> {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const rows = await db.query.insights.findMany({
+    where: (insight, { and, eq, gte }) =>
+      and(eq(insight.userId, userId), gte(insight.createdAt, since)),
+    columns: { createdAt: true },
+    orderBy: (insight, { asc }) => [asc(insight.createdAt)],
+    limit: DAILY_INSIGHT_QUOTA + 1,
+  });
+  const used = rows.length;
+  // The window is rolling, so the next slot frees up exactly 24h
+  // after the OLDEST insight in the current window. When the user has
+  // headroom we don't show a reset time at all.
+  const oldest = rows[0]?.createdAt ?? null;
+  const resetsAt =
+    used >= DAILY_INSIGHT_QUOTA && oldest
+      ? new Date(oldest.getTime() + 24 * 60 * 60 * 1000)
+      : null;
+  return {
+    used,
+    remaining: Math.max(0, DAILY_INSIGHT_QUOTA - used),
+    limit: DAILY_INSIGHT_QUOTA,
+    resetsAt,
+  };
+}
+
+/**
  * Generate an insight from a pre-fetched ReportData. Persisted to the
  * `insight` table for future retrieval (the ai_narrative widget reads
  * the latest cached row for a given window).
@@ -388,6 +433,16 @@ export async function generateInsight(args: {
   if (!reportData.hasData) {
     throw new Error(
       `Belum ada data tersinkron untuk ${reportData.windowLabel}. Backfill dulu di /data-sources.`,
+    );
+  }
+
+  const quotaStatus = await getUsageStatus(userId);
+  if (quotaStatus.remaining === 0) {
+    const resetsHint = quotaStatus.resetsAt
+      ? ` Quota berikutnya tersedia ${quotaStatus.resetsAt.toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" })}.`
+      : "";
+    throw new Error(
+      `Quota generate insight harian habis (${quotaStatus.limit}/24 jam).${resetsHint}`,
     );
   }
 
