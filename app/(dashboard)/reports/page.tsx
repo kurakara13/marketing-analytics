@@ -61,7 +61,7 @@ export default async function ReportsPage() {
         <ReportCard
           title="Weekly Report"
           icon={Calendar}
-          description="7 hari terakhir vs 7 hari sebelumnya, dengan trend 6 minggu. 8 slide PPT — cover, executive summary, website performance, Google Ads, organic, narrative, action items, closing."
+          description="ISO week yang baru selesai (Senin–Minggu) vs minggu sebelumnya, dengan trend 6 minggu. 8 slide PPT — cover, executive summary, website performance, Google Ads, organic, narrative, action items, closing."
           href="/api/reports/weekly/export"
           filename="marketing-analytics-weekly-{date}.pptx"
           enabled={realConnections.length > 0}
@@ -69,7 +69,7 @@ export default async function ReportsPage() {
         <ReportCard
           title="Monthly Report"
           icon={FileText}
-          description="30 hari terakhir vs 30 hari sebelumnya, dengan trend 6 bulan. Sama 8 slide tapi window lebih panjang — cocok untuk monthly review."
+          description="Bulan kalender lengkap yang baru selesai vs bulan sebelumnya, dengan trend 6 bulan. Sama 8 slide tapi window lebih panjang — cocok untuk monthly review."
           href="/api/reports/monthly/export"
           filename="marketing-analytics-monthly-{date}.pptx"
           enabled={realConnections.length > 0}

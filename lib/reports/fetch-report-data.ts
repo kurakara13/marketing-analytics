@@ -151,6 +151,150 @@ function formatDateRangeLabel(start: string, end: string): string {
   return `${sDay} ${sMonth} – ${eDay} ${eMonth} ${eYear}`;
 }
 
+function formatMonthLabel(d: Date): string {
+  return `${MONTH_LABELS_ID[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
+
+// Compute the report's date layout based on calendar boundaries:
+//   weekly  → ISO weeks (Mon–Sun)
+//   monthly → calendar months (1st–end-of-month)
+//
+// Default behavior anchors on the LAST COMPLETED period, not "yesterday".
+// Rationale: a user generating a Monday-morning weekly report wants the
+// week that just finished (not "this week, only 1 day in"). Likewise a
+// monthly report on the 5th of May should be for April, not for "the
+// last 30 days".
+//
+// The optional `anchorDate` lets callers target a specific past period:
+//   weekly  → any date inside the target week (rounded down to its Sunday)
+//   monthly → any date inside the target month
+function computePeriodLayout(args: {
+  period: PeriodKey;
+  anchorDate?: string;
+}): {
+  windowStart: string;
+  windowEnd: string;
+  previousStart: string;
+  previousEnd: string;
+  /** Earliest bucket start — used as the lower bound of the SQL query. */
+  trendStart: string;
+  trendBuckets: { label: string; start: string; end: string }[];
+  weekNumber?: number;
+  windowLabel: string;
+} {
+  const TREND_BUCKETS = 6;
+
+  if (args.period === "weekly") {
+    // Anchor: parse user-provided date or use today.
+    const reference = args.anchorDate
+      ? new Date(args.anchorDate + "T00:00:00Z")
+      : todayUtc();
+
+    // The window's last day is the Sunday of the most recently
+    // completed ISO week. If the reference is itself a Sunday in the
+    // past, that Sunday is the window end (it's complete). Otherwise,
+    // walk back to the previous Sunday.
+    const sunday = mostRecentCompletedSunday(reference);
+
+    const windowEnd = sunday;
+    const windowStart = addDays(sunday, -6);
+    const previousEnd = addDays(sunday, -7);
+    const previousStart = addDays(sunday, -13);
+
+    const buckets: { label: string; start: string; end: string }[] = [];
+    for (let i = TREND_BUCKETS - 1; i >= 0; i--) {
+      const end = addDays(sunday, -7 * i);
+      const start = addDays(end, -6);
+      buckets.push({
+        label: `W${isoWeekNumber(end)}`,
+        start: isoDate(start),
+        end: isoDate(end),
+      });
+    }
+
+    return {
+      windowStart: isoDate(windowStart),
+      windowEnd: isoDate(windowEnd),
+      previousStart: isoDate(previousStart),
+      previousEnd: isoDate(previousEnd),
+      trendStart: buckets[0].start,
+      trendBuckets: buckets,
+      weekNumber: isoWeekNumber(sunday),
+      windowLabel: formatDateRangeLabel(
+        isoDate(windowStart),
+        isoDate(windowEnd),
+      ),
+    };
+  }
+
+  // ─── Monthly ────────────────────────────────────────────────────────
+  // Window = the calendar month containing the reference date. Default
+  // reference: last day of the previous month (so reports run on May 5
+  // cover April).
+  const today = todayUtc();
+  const reference = args.anchorDate
+    ? new Date(args.anchorDate + "T00:00:00Z")
+    : new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 0)); // last day of previous month
+
+  const refYear = reference.getUTCFullYear();
+  const refMonth = reference.getUTCMonth();
+
+  const windowStart = new Date(Date.UTC(refYear, refMonth, 1));
+  // Day 0 of next month = last day of this month (handles 28/29/30/31 correctly).
+  const windowEnd = new Date(Date.UTC(refYear, refMonth + 1, 0));
+
+  const previousStart = new Date(Date.UTC(refYear, refMonth - 1, 1));
+  const previousEnd = new Date(Date.UTC(refYear, refMonth, 0));
+
+  const buckets: { label: string; start: string; end: string }[] = [];
+  for (let i = TREND_BUCKETS - 1; i >= 0; i--) {
+    const monthStart = new Date(Date.UTC(refYear, refMonth - i, 1));
+    const monthEnd = new Date(
+      Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 0),
+    );
+    buckets.push({
+      label: MONTH_LABELS_ID[monthStart.getUTCMonth()],
+      start: isoDate(monthStart),
+      end: isoDate(monthEnd),
+    });
+  }
+
+  return {
+    windowStart: isoDate(windowStart),
+    windowEnd: isoDate(windowEnd),
+    previousStart: isoDate(previousStart),
+    previousEnd: isoDate(previousEnd),
+    trendStart: buckets[0].start,
+    trendBuckets: buckets,
+    weekNumber: undefined,
+    windowLabel: formatMonthLabel(windowStart),
+  };
+}
+
+function todayUtc(): Date {
+  const now = new Date();
+  return new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  );
+}
+
+// Returns the Sunday of the most recently completed ISO week, relative
+// to `reference`. ISO weeks run Monday–Sunday.
+//   reference Tue Apr 28 → Sun Apr 26
+//   reference Mon Apr 27 → Sun Apr 26
+//   reference Sun Apr 26 → Sun Apr 26   (today is Sunday and complete)
+//   reference Sat Apr 25 → Sun Apr 19   (last complete week, since Apr 25
+//                                         is mid-week-W17, not yet done)
+//
+// We treat "reference" as a snapshot taken at end-of-day: if it falls on
+// a Sunday, that Sunday is considered complete. Otherwise we walk back
+// to the previous Sunday (which is always complete).
+function mostRecentCompletedSunday(reference: Date): Date {
+  const dow = reference.getUTCDay(); // 0=Sun, 1=Mon, …, 6=Sat
+  if (dow === 0) return reference;
+  return addDays(reference, -dow);
+}
+
 // Convert one stored daily_metrics row into a ReportTotals delta, routing
 // fields to the right channel based on `row.source`. This prevents
 // organic clicks (Search Console) from being summed with paid clicks
@@ -197,24 +341,27 @@ function rowToDelta(row: typeof dailyMetrics.$inferSelect): ReportTotals {
 export async function fetchReportData(args: {
   userId: string;
   period: PeriodKey;
-  /** Optional anchor date inside the window. Defaults to "yesterday" so
-   *  the window covers the most recent complete day. */
+  /** Optional anchor date inside the target period. Defaults to the last
+   *  completed period (last full ISO week for weekly, previous calendar
+   *  month for monthly) so a Monday-morning report covers the week that
+   *  just finished, not "this week, only 1 day in". */
   anchorDate?: string;
 }): Promise<ReportData> {
   const period = args.period;
-  const windowDays = period === "weekly" ? 7 : 30;
-  const trendBuckets = 6;
-
-  // Anchor = end of current window. Default: yesterday.
-  const anchor = args.anchorDate
-    ? new Date(args.anchorDate + "T00:00:00Z")
-    : addDays(new Date(), -1);
-
-  const windowEnd = isoDate(anchor);
-  const windowStart = isoDate(addDays(anchor, -(windowDays - 1)));
-  const previousEnd = isoDate(addDays(anchor, -windowDays));
-  const previousStart = isoDate(addDays(anchor, -(windowDays * 2 - 1)));
-  const trendStart = isoDate(addDays(anchor, -(windowDays * trendBuckets - 1)));
+  const layout = computePeriodLayout({
+    period,
+    anchorDate: args.anchorDate,
+  });
+  const {
+    windowStart,
+    windowEnd,
+    previousStart,
+    previousEnd,
+    trendStart,
+    trendBuckets,
+    weekNumber,
+    windowLabel,
+  } = layout;
 
   const userConnections = await db
     .select()
@@ -229,8 +376,8 @@ export async function fetchReportData(args: {
       period,
       windowStart,
       windowEnd,
-      windowLabel: formatDateRangeLabel(windowStart, windowEnd),
-      weekNumber: period === "weekly" ? isoWeekNumber(anchor) : undefined,
+      windowLabel,
+      weekNumber,
       totals: { ...ZERO_TOTALS },
       previousTotals: { ...ZERO_TOTALS },
       trend: [],
@@ -257,21 +404,12 @@ export async function fetchReportData(args: {
     );
 
   // Bucket rows into the 6 trend buckets.
-  const buckets: TrendPoint[] = [];
-  for (let i = trendBuckets - 1; i >= 0; i--) {
-    const bucketEnd = isoDate(addDays(anchor, -(windowDays * i)));
-    const bucketStart = isoDate(addDays(anchor, -(windowDays * (i + 1) - 1)));
-    const label =
-      period === "weekly"
-        ? `W${isoWeekNumber(new Date(bucketEnd + "T00:00:00Z"))}`
-        : MONTH_LABELS_ID[new Date(bucketEnd + "T00:00:00Z").getUTCMonth()];
-    buckets.push({
-      label,
-      start: bucketStart,
-      end: bucketEnd,
-      ...ZERO_TOTALS,
-    });
-  }
+  const buckets: TrendPoint[] = trendBuckets.map((b) => ({
+    label: b.label,
+    start: b.start,
+    end: b.end,
+    ...ZERO_TOTALS,
+  }));
 
   // Aggregate row-by-row.
   const totals: ReportTotals = { ...ZERO_TOTALS };
@@ -326,8 +464,8 @@ export async function fetchReportData(args: {
     period,
     windowStart,
     windowEnd,
-    windowLabel: formatDateRangeLabel(windowStart, windowEnd),
-    weekNumber: period === "weekly" ? isoWeekNumber(anchor) : undefined,
+    windowLabel,
+    weekNumber,
     totals,
     previousTotals,
     trend: buckets,
