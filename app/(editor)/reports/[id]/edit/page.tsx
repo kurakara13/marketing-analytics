@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { reportTemplates } from "@/lib/db/schema";
+import { fetchReportData } from "@/lib/reports/fetch-report-data";
 import { parseTemplateDefinition } from "@/lib/reports/templates/types";
 import { TemplateEditor } from "@/components/templates/editor/template-editor";
 
@@ -53,12 +54,38 @@ export default async function EditReportPage({
     );
   }
 
+  // Fetch ReportData once at editor mount so the canvas preview can
+  // render real KPI values and chart data (instead of placeholder
+  // "ga4.sessions" labels). Period maps from the template's anchor
+  // setting; anchorDate left undefined for last-completed-period
+  // default. Errors here are non-fatal — we fall back to an empty
+  // shell so the editor still loads.
+  const period =
+    definition.settings.anchor.kind === "auto_monthly" ? "monthly" : "weekly";
+  const anchorDate =
+    definition.settings.anchor.kind === "specific"
+      ? definition.settings.anchor.date
+      : undefined;
+
+  let reportData;
+  try {
+    reportData = await fetchReportData({
+      userId: session.user.id,
+      period,
+      anchorDate,
+    });
+  } catch (err) {
+    console.error("[editor] fetchReportData failed:", err);
+    reportData = null;
+  }
+
   return (
     <TemplateEditor
       templateId={template.id}
       initialName={template.name}
       initialDescription={template.description}
       initialDefinition={definition}
+      reportData={reportData}
     />
   );
 }

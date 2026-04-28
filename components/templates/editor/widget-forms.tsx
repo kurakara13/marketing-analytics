@@ -15,6 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import {
   SHAPE_KINDS,
+  type BarChartWidgetConfig,
   type DataSource,
   type ImageWidgetConfig,
   type KpiCardWidgetConfig,
@@ -70,6 +71,17 @@ function ConfigBody({ widget, onUpdate }: Props) {
           onChange={(next) =>
             onUpdate((w) =>
               w.type === "line_chart" ? { ...w, config: next } : w,
+            )
+          }
+        />
+      );
+    case "bar_chart":
+      return (
+        <BarChartForm
+          config={widget.config}
+          onChange={(next) =>
+            onUpdate((w) =>
+              w.type === "bar_chart" ? { ...w, config: next } : w,
             )
           }
         />
@@ -763,6 +775,161 @@ function ShapeForm({
             onChange={(v) => onChange({ ...config, borderColor: v })}
           />
         ) : null}
+      </Section>
+    </>
+  );
+}
+
+// ─── Bar chart form ─────────────────────────────────────────────────────
+function BarChartForm({
+  config,
+  onChange,
+}: {
+  config: BarChartWidgetConfig;
+  onChange: (next: BarChartWidgetConfig) => void;
+}) {
+  const metrics = getAvailableMetrics(config.dataSource);
+
+  return (
+    <>
+      <Section title="Chart">
+        <Field label="Title" hint="Kosongin untuk hide title.">
+          <Input
+            value={config.title}
+            onChange={(e) => onChange({ ...config, title: e.target.value })}
+            placeholder="Trend Leads per Minggu"
+            className="h-8 text-sm"
+          />
+        </Field>
+        <ColorField
+          label="Bar color"
+          value={config.color}
+          onChange={(v) => onChange({ ...config, color: v })}
+        />
+      </Section>
+
+      <Section title="Data">
+        <Field label="Source">
+          <Select
+            value={config.dataSource}
+            onValueChange={(v) => {
+              if (!v) return;
+              const next = v as DataSource;
+              const newMetrics = getAvailableMetrics(next);
+              onChange({
+                ...config,
+                dataSource: next,
+                metric: newMetrics[0] ?? config.metric,
+              });
+            }}
+          >
+            <SelectTrigger size="sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {DATA_SOURCE_OPTIONS.map((s) => (
+                <SelectItem key={s.value} value={s.value}>
+                  {s.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label="Metric">
+          <Select
+            value={config.metric}
+            onValueChange={(v) => v && onChange({ ...config, metric: v })}
+          >
+            <SelectTrigger size="sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {metrics.map((m) => (
+                <SelectItem key={m} value={m}>
+                  {m}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field
+          label="Group bars by"
+          hint="Time = bar per minggu/bulan. Campaign = bar per campaign. Source = bar per channel."
+        >
+          <Select
+            value={config.groupBy}
+            onValueChange={(v) =>
+              v &&
+              onChange({
+                ...config,
+                groupBy: v as BarChartWidgetConfig["groupBy"],
+              })
+            }
+          >
+            <SelectTrigger size="sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="time">Time (trend buckets)</SelectItem>
+              <SelectItem value="campaign">Campaign</SelectItem>
+              <SelectItem value="source">Source / Channel</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+      </Section>
+
+      <Section title="Compare series">
+        <Field
+          label="Tampilkan compare bars"
+          hint="Hanya berlaku untuk Group by = Time."
+        >
+          <Select
+            value={config.compareSeries?.kind ?? "none"}
+            onValueChange={(v) => {
+              if (!v) return;
+              if (v === "none") {
+                onChange({ ...config, compareSeries: null });
+              } else if (v === "monthly_target") {
+                onChange({
+                  ...config,
+                  compareSeries: { label: "Target", kind: "monthly_target" },
+                });
+              } else {
+                onChange({
+                  ...config,
+                  compareSeries: {
+                    label: "Previous",
+                    kind: "previous_period",
+                  },
+                });
+              }
+            }}
+          >
+            <SelectTrigger size="sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">None</SelectItem>
+              <SelectItem value="monthly_target">
+                Monthly target (sessions)
+              </SelectItem>
+              <SelectItem value="previous_period">Previous period</SelectItem>
+            </SelectContent>
+          </Select>
+        </Field>
+      </Section>
+
+      <Section title="Display">
+        <CheckboxField
+          label="Show legend"
+          checked={config.showLegend}
+          onChange={(v) => onChange({ ...config, showLegend: v })}
+        />
+        <CheckboxField
+          label="Show values di setiap bar"
+          checked={config.showValues}
+          onChange={(v) => onChange({ ...config, showValues: v })}
+        />
       </Section>
     </>
   );

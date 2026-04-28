@@ -96,7 +96,7 @@ export const WIDGET_PALETTE_ITEMS: PaletteItem[] = [
     label: "Bar Chart",
     description: "Bar grouped — actual vs target / vs previous.",
     category: "data",
-    enabled: false,
+    enabled: true,
   },
   {
     type: "table",

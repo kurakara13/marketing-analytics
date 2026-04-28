@@ -5,6 +5,7 @@
 import "./text";
 import "./kpi-card";
 import "./line-chart";
+import "./bar-chart";
 import "./image";
 import "./shape";
 

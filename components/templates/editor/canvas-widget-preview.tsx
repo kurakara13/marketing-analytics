@@ -1,11 +1,30 @@
 "use client";
 
-import { BarChart3, Image as ImageIcon, LineChart, Table } from "lucide-react";
+import { Image as ImageIcon, Table } from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  Line,
+  LineChart as RcLineChart,
+  ResponsiveContainer,
+} from "recharts";
 
+import type { ReportTotals } from "@/lib/reports/fetch-report-data";
 import type {
+  BarChartWidgetConfig,
+  KpiCardWidgetConfig,
+  LineChartWidgetConfig,
   ShapeWidgetConfig,
   Widget,
 } from "@/lib/reports/templates/types";
+import {
+  deltaText,
+  formatMetricValue,
+  resolveMetricFromTotals,
+  resolveTotalsFor,
+  resolveTrendFor,
+} from "@/lib/reports/widgets/data-resolver";
+import { useEditorContext } from "./editor-context";
 
 // Lightweight HTML/CSS preview of how a widget will look in PPT.
 // Not pixel-perfect — pptxgenjs renders the actual PPT, this is just
@@ -108,42 +127,13 @@ export function CanvasWidgetPreview({ widget }: { widget: Widget }) {
       );
 
     case "kpi_card":
-      return (
-        <div className="bg-card flex h-full w-full flex-col justify-between gap-1 border p-1.5">
-          <div className="text-muted-foreground text-[9px] font-bold uppercase tracking-wide">
-            {widget.config.label}
-          </div>
-          <div className="text-base font-bold leading-tight">
-            {widget.config.dataSource}.{widget.config.metric}
-          </div>
-          {widget.config.showDelta ? (
-            <div className="text-muted-foreground text-[9px]">vs previous</div>
-          ) : null}
-        </div>
-      );
+      return <KpiCardPreview config={widget.config} />;
 
     case "line_chart":
-      return (
-        <div className="bg-card text-muted-foreground flex h-full w-full flex-col items-center justify-center gap-1 border">
-          <LineChart className="size-5" />
-          <span className="text-[10px] font-medium">
-            {widget.config.title || `Trend ${widget.config.metric}`}
-          </span>
-          <span className="text-[9px]">
-            {widget.config.dataSource}.{widget.config.metric}
-          </span>
-        </div>
-      );
+      return <LineChartPreview config={widget.config} />;
 
     case "bar_chart":
-      return (
-        <div className="bg-card text-muted-foreground flex h-full w-full flex-col items-center justify-center gap-1 border">
-          <BarChart3 className="size-5" />
-          <span className="text-[10px] font-medium">
-            {widget.config.title || `Bar ${widget.config.metric}`}
-          </span>
-        </div>
-      );
+      return <BarChartPreview config={widget.config} />;
 
     case "table":
       return (
@@ -256,5 +246,189 @@ function ShapePreview({ config }: { config: ShapeWidgetConfig }) {
     >
       {inner}
     </svg>
+  );
+}
+
+// ─── Data-aware previews (KPI / line / bar) ─────────────────────────────
+//
+// These read live ReportData from the editor context (fetched once at
+// editor mount) and render real values + mini charts so the canvas
+// matches what the .pptx will show. Falls back to placeholder text
+// when reportData is null (no connections yet, or fetch failed).
+
+function KpiCardPreview({ config }: { config: KpiCardWidgetConfig }) {
+  const { reportData } = useEditorContext();
+
+  let displayValue: string;
+  let deltaLabel: string | null = null;
+
+  if (!reportData) {
+    displayValue = `${config.dataSource}.${config.metric}`;
+    deltaLabel = config.showDelta ? "vs previous" : null;
+  } else {
+    const totals = resolveTotalsFor(reportData, config.dateRange);
+    if (!totals) {
+      displayValue = "—";
+    } else {
+      const value = resolveMetricFromTotals({
+        totals,
+        dataSource: config.dataSource,
+        metric: config.metric,
+        filters: config.filters,
+      });
+      displayValue = formatMetricValue(value, config.format);
+
+      if (config.showDelta) {
+        const compareTotals = resolveTotalsFor(
+          reportData,
+          config.deltaCompareTo,
+        );
+        if (compareTotals) {
+          const compareValue = resolveMetricFromTotals({
+            totals: compareTotals,
+            dataSource: config.dataSource,
+            metric: config.metric,
+            filters: config.filters,
+          });
+          deltaLabel = deltaText(value, compareValue);
+        }
+      }
+    }
+  }
+
+  return (
+    <div className="bg-card flex h-full w-full flex-col justify-between gap-1 border p-2">
+      <div className="text-muted-foreground text-[10px] font-bold uppercase tracking-wide leading-tight">
+        {config.label}
+      </div>
+      <div className="text-foreground truncate text-lg font-bold leading-tight">
+        {displayValue}
+      </div>
+      {deltaLabel ? (
+        <div className="text-muted-foreground text-[10px] leading-tight">
+          {deltaLabel}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function LineChartPreview({ config }: { config: LineChartWidgetConfig }) {
+  const { reportData } = useEditorContext();
+
+  const chartData = (() => {
+    if (!reportData) return null;
+    const trend = resolveTrendFor(reportData, config.dateRange);
+    if (!trend || trend.length === 0) return null;
+    return trend.map((b) => ({
+      label: b.label,
+      value: resolveMetricFromTotals({
+        totals: b as ReportTotals,
+        dataSource: config.dataSource,
+        metric: config.metric,
+        filters: config.filters,
+      }),
+    }));
+  })();
+
+  return (
+    <div className="bg-card flex h-full w-full flex-col gap-1 border p-2">
+      {config.title ? (
+        <div className="text-foreground text-[11px] font-semibold leading-tight">
+          {config.title}
+        </div>
+      ) : null}
+      <div className="min-h-0 flex-1">
+        {chartData ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <RcLineChart data={chartData}>
+              <Line
+                type="monotone"
+                dataKey="value"
+                stroke={`#${config.color}`}
+                strokeWidth={2}
+                dot={{ r: 2, fill: `#${config.color}` }}
+              />
+            </RcLineChart>
+          </ResponsiveContainer>
+        ) : (
+          <PlaceholderChartArea label={`${config.dataSource}.${config.metric}`} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BarChartPreview({ config }: { config: BarChartWidgetConfig }) {
+  const { reportData } = useEditorContext();
+
+  const chartData = (() => {
+    if (!reportData) return null;
+
+    if (config.groupBy === "time") {
+      const trend = resolveTrendFor(reportData, config.dateRange);
+      if (!trend || trend.length === 0) return null;
+      return trend.map((b) => ({
+        label: b.label,
+        value: resolveMetricFromTotals({
+          totals: b as ReportTotals,
+          dataSource: config.dataSource,
+          metric: config.metric,
+          filters: config.filters,
+        }),
+      }));
+    }
+    if (config.groupBy === "campaign") {
+      return reportData.campaigns
+        .filter((c) => c.source === config.dataSource)
+        .slice(0, 8)
+        .map((c) => ({
+          label: c.campaignName ?? c.campaignId ?? "(rollup)",
+          value: resolveMetricFromTotals({
+            totals: c as ReportTotals,
+            dataSource: config.dataSource,
+            metric: config.metric,
+            filters: config.filters,
+          }),
+        }));
+    }
+    return reportData.connectedSources.map((src) => ({
+      label: src,
+      value: resolveMetricFromTotals({
+        totals: reportData.totals,
+        dataSource: src as BarChartWidgetConfig["dataSource"],
+        metric: config.metric,
+        filters: config.filters,
+      }),
+    }));
+  })();
+
+  return (
+    <div className="bg-card flex h-full w-full flex-col gap-1 border p-2">
+      {config.title ? (
+        <div className="text-foreground text-[11px] font-semibold leading-tight">
+          {config.title}
+        </div>
+      ) : null}
+      <div className="min-h-0 flex-1">
+        {chartData && chartData.length > 0 ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData}>
+              <Bar dataKey="value" fill={`#${config.color}`} />
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <PlaceholderChartArea label={`${config.dataSource}.${config.metric}`} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PlaceholderChartArea({ label }: { label: string }) {
+  return (
+    <div className="text-muted-foreground/70 flex h-full w-full items-center justify-center text-[10px] italic">
+      {label}
+    </div>
   );
 }
