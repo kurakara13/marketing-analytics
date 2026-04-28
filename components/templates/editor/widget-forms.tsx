@@ -15,12 +15,14 @@ import {
 import { cn } from "@/lib/utils";
 import type {
   DataSource,
+  ImageWidgetConfig,
   KpiCardWidgetConfig,
   LineChartWidgetConfig,
   TextWidgetConfig,
   Widget,
 } from "@/lib/reports/templates/types";
 import { getAvailableMetrics } from "@/lib/reports/widgets/data-resolver";
+import { ImageUploadField } from "./image-upload-field";
 
 // ─── Form dispatcher ────────────────────────────────────────────────────
 type Props = {
@@ -67,6 +69,15 @@ function ConfigBody({ widget, onUpdate }: Props) {
             onUpdate((w) =>
               w.type === "line_chart" ? { ...w, config: next } : w,
             )
+          }
+        />
+      );
+    case "image":
+      return (
+        <ImageForm
+          config={widget.config}
+          onChange={(next) =>
+            onUpdate((w) => (w.type === "image" ? { ...w, config: next } : w))
           }
         />
       );
@@ -592,5 +603,53 @@ function LineChartForm({
         />
       </Section>
     </>
+  );
+}
+
+// ─── Image widget form ──────────────────────────────────────────────────
+function ImageForm({
+  config,
+  onChange,
+}: {
+  config: ImageWidgetConfig;
+  onChange: (next: ImageWidgetConfig) => void;
+}) {
+  return (
+    <Section title="Image">
+      <ImageUploadField
+        imagePath={config.imagePath}
+        onChange={(path) => onChange({ ...config, imagePath: path })}
+      />
+      <Field
+        label="Alt text"
+        hint="Untuk accessibility — dibaca screen reader saat orang lihat slide-nya."
+      >
+        <Input
+          value={config.altText}
+          onChange={(e) => onChange({ ...config, altText: e.target.value })}
+          placeholder="contoh: Logo perusahaan"
+          className="h-8 text-sm"
+        />
+      </Field>
+      <Field
+        label="Fit"
+        hint="Contain: pertahankan rasio (mungkin ada area kosong). Cover: isi penuh box (mungkin terpotong)."
+      >
+        <Select
+          value={config.fit}
+          onValueChange={(v) =>
+            v && onChange({ ...config, fit: v as ImageWidgetConfig["fit"] })
+          }
+        >
+          <SelectTrigger size="sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="contain">Contain</SelectItem>
+            <SelectItem value="cover">Cover</SelectItem>
+          </SelectContent>
+        </Select>
+      </Field>
+    </Section>
   );
 }

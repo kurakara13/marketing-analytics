@@ -13,6 +13,7 @@ import {
   parseTemplateDefinition,
   type TemplateDefinition,
 } from "@/lib/reports/templates/types";
+import { saveImage } from "@/lib/storage";
 
 // ─── Create blank template ──────────────────────────────────────────────
 export async function createTemplateAction(formData: FormData): Promise<void> {
@@ -124,4 +125,68 @@ export async function deleteTemplateAction(
 
   revalidatePath("/reports");
   return { success: true };
+}
+
+// ─── Upload image (for image widgets) ───────────────────────────────────
+export type UploadImageResult =
+  | { error: string }
+  | {
+      success: true;
+      imagePath: string;
+      contentType: string;
+      size: number;
+    };
+
+export async function uploadImageAction(
+  formData: FormData,
+): Promise<UploadImageResult> {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return { error: "Tidak ada session aktif" };
+  }
+
+  const templateIdRaw = formData.get("templateId");
+  const file = formData.get("file");
+
+  if (typeof templateIdRaw !== "string" || templateIdRaw.length === 0) {
+    return { error: "templateId tidak ada" };
+  }
+  if (!(file instanceof File)) {
+    return { error: "File tidak valid" };
+  }
+
+  // Verify the user owns the template — prevents cross-user uploads
+  // (which would land in another user's directory and be inaccessible
+  // to them anyway, but better to fail explicitly).
+  const [template] = await db
+    .select({ id: reportTemplates.id })
+    .from(reportTemplates)
+    .where(
+      and(
+        eq(reportTemplates.id, templateIdRaw),
+        eq(reportTemplates.userId, session.user.id),
+      ),
+    )
+    .limit(1);
+  if (!template) {
+    return { error: "Template tidak ditemukan" };
+  }
+
+  try {
+    const stored = await saveImage({
+      userId: session.user.id,
+      templateId: templateIdRaw,
+      file,
+    });
+    return {
+      success: true,
+      imagePath: stored.relativePath,
+      contentType: stored.contentType,
+      size: stored.size,
+    };
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Upload gagal",
+    };
+  }
 }

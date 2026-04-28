@@ -35,12 +35,20 @@ export function CanvasWidgetPreview({ widget }: { widget: Widget }) {
       );
 
     case "image":
-      return (
+      return widget.config.imagePath ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={`/api/uploads/${widget.config.imagePath}`}
+          alt={widget.config.altText || ""}
+          className="block h-full w-full"
+          style={{
+            objectFit: widget.config.fit === "cover" ? "cover" : "contain",
+          }}
+        />
+      ) : (
         <div className="bg-muted/60 text-muted-foreground flex h-full w-full flex-col items-center justify-center gap-1 border border-dashed">
           <ImageIcon className="size-5" />
-          <span className="text-xs">
-            {widget.config.imagePath ? "Image" : "No image"}
-          </span>
+          <span className="text-xs">No image</span>
         </div>
       );
 

@@ -20,6 +20,7 @@ import {
   type Widget,
 } from "@/lib/reports/templates/types";
 import { cn } from "@/lib/utils";
+import { EditorProvider } from "./editor-context";
 import { SaveStatus, type SaveState } from "./save-status";
 import { SlideList } from "./slide-list";
 import { SlideCanvas } from "./slide-canvas";
@@ -286,6 +287,7 @@ export function TemplateEditor({
   }, [selectedWidgetId, handleDeleteWidget]);
 
   return (
+    <EditorProvider templateId={templateId}>
     <div className="flex h-full min-h-0 flex-1 flex-col gap-4">
       {/* Toolbar */}
       <header className="flex items-center gap-3 px-1">
@@ -382,5 +384,6 @@ export function TemplateEditor({
         />
       </div>
     </div>
+    </EditorProvider>
   );
 }

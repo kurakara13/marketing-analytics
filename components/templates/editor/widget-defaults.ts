@@ -52,7 +52,7 @@ export const WIDGET_PALETTE_ITEMS: PaletteItem[] = [
     label: "Image",
     description: "Logo atau gambar yang di-upload.",
     category: "layout",
-    enabled: false,
+    enabled: true,
   },
   {
     type: "divider",
