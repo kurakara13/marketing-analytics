@@ -47,10 +47,83 @@ const METRIC_MAP: MetricMapping = {
   google_business_profile: {
     // Placeholder — GBP connector not built yet.
   },
+  // Computed metrics combine fields across sources. Listed here so the
+  // form's metric picker can show them; the actual formulas live in
+  // resolveComputedMetric() below. The TotalsField on the right side
+  // is a placeholder — never read for computed metrics.
+  computed: {
+    cpl: "spend",
+    cpc: "spend",
+    cpm: "spend",
+    ctr: "clicks",
+    conv_rate: "conversions",
+    roas: "revenue",
+    aov: "revenue",
+  },
+};
+
+// Display labels for computed metrics — used in dropdowns + tooltips.
+export const COMPUTED_METRIC_LABELS: Record<string, string> = {
+  cpl: "CPL (Cost / Lead)",
+  cpc: "CPC (Cost / Click)",
+  cpm: "CPM (Cost / 1000 Impressions)",
+  ctr: "CTR (Click-through Rate)",
+  conv_rate: "Conversion Rate",
+  roas: "ROAS (Return on Ad Spend)",
+  aov: "AOV (Avg Order Value)",
+};
+
+// Sensible default format per computed metric — what the user almost
+// always wants. The form can still be overridden.
+export const COMPUTED_METRIC_DEFAULT_FORMAT: Record<
+  string,
+  "number" | "currency_idr" | "percent" | "duration_seconds"
+> = {
+  cpl: "currency_idr",
+  cpc: "currency_idr",
+  cpm: "currency_idr",
+  ctr: "percent",
+  conv_rate: "percent",
+  roas: "number",
+  aov: "currency_idr",
 };
 
 export function getAvailableMetrics(source: DataSource): string[] {
   return Object.keys(METRIC_MAP[source] ?? {});
+}
+
+// Compute a derived metric from raw totals. Returns 0 when the
+// denominator is 0 to avoid divide-by-zero / Infinity propagating
+// through formatters.
+function resolveComputedMetric(
+  totals: ReportTotals,
+  metric: string,
+): number {
+  switch (metric) {
+    case "cpl":
+      // Cost per lead. We don't yet have a "leads" filter so this
+      // falls back to total conversions — accurate when the user's
+      // GA4 only has lead-shaped conversion events configured.
+      return totals.conversions > 0 ? totals.spend / totals.conversions : 0;
+    case "cpc":
+      return totals.clicks > 0 ? totals.spend / totals.clicks : 0;
+    case "cpm":
+      return totals.impressions > 0
+        ? (totals.spend / totals.impressions) * 1000
+        : 0;
+    case "ctr":
+      // Returns as a fraction (0.05 = 5%). formatMetricValue("percent")
+      // multiplies by 100 for display.
+      return totals.impressions > 0 ? totals.clicks / totals.impressions : 0;
+    case "conv_rate":
+      return totals.sessions > 0 ? totals.conversions / totals.sessions : 0;
+    case "roas":
+      return totals.spend > 0 ? totals.revenue / totals.spend : 0;
+    case "aov":
+      return totals.conversions > 0 ? totals.revenue / totals.conversions : 0;
+    default:
+      return 0;
+  }
 }
 
 /**
@@ -65,6 +138,9 @@ export function resolveMetricFromTotals(args: {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   filters?: WidgetFilter;
 }): number {
+  if (args.dataSource === "computed") {
+    return resolveComputedMetric(args.totals, args.metric);
+  }
   const field = METRIC_MAP[args.dataSource]?.[args.metric];
   if (!field) return 0;
   const value = args.totals[field];

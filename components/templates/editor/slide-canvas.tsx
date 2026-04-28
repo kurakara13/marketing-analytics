@@ -159,7 +159,13 @@ export function SlideCanvas({
     <div
       ref={containerRef}
       className={cn(
-        "relative flex min-h-0 items-center justify-center overflow-auto rounded-xl border border-border/60 p-4",
+        "relative flex min-h-0 overflow-auto rounded-xl border border-border/60 p-4",
+        // `safe center` falls back to flex-start when the canvas is
+        // larger than the container — so when zoomed in, the user can
+        // scroll all the way to the top-left edge instead of getting
+        // stuck at a centered position they can't escape. When the
+        // canvas is smaller, regular center kicks in.
+        "[align-items:safe_center] [justify-content:safe_center]",
         // Subtle radial backdrop so the canvas pops slightly off the page.
         "bg-[radial-gradient(circle_at_50%_30%,rgba(15,23,42,0.04),transparent_70%)]",
       )}

@@ -296,16 +296,40 @@ function KpiCardPreview({ config }: { config: KpiCardWidgetConfig }) {
     }
   }
 
+  // CSS container queries do the heavy lifting here:
+  //
+  //   container-type: inline-size      → makes this card the container
+  //   font-size: clamp(min, X cqi, max) → font scales with card width
+  //
+  // cqi = 1% of container's inline (horizontal) size. Numbers tuned
+  // so a 2.95"-wide card at ~85 px/in (~250 px) renders the value at
+  // ~22 px (close to the original text-lg) but a half-width card
+  // shrinks the value cleanly instead of truncating it.
   return (
-    <div className="bg-card flex h-full w-full flex-col justify-between gap-1 border p-2">
-      <div className="text-muted-foreground text-[10px] font-bold uppercase tracking-wide leading-tight">
+    <div
+      className="bg-card flex h-full w-full flex-col justify-between gap-[3cqi] border p-[6cqi]"
+      style={{ containerType: "inline-size" }}
+    >
+      <div
+        className="text-muted-foreground font-bold uppercase leading-tight"
+        style={{
+          fontSize: "clamp(0.55rem, 4.5cqi, 0.75rem)",
+          letterSpacing: "0.04em",
+        }}
+      >
         {config.label}
       </div>
-      <div className="text-foreground truncate text-lg font-bold leading-tight">
+      <div
+        className="text-foreground font-bold leading-tight"
+        style={{ fontSize: "clamp(0.85rem, 9cqi, 1.75rem)" }}
+      >
         {displayValue}
       </div>
       {deltaLabel ? (
-        <div className="text-muted-foreground text-[10px] leading-tight">
+        <div
+          className="text-muted-foreground leading-tight"
+          style={{ fontSize: "clamp(0.5rem, 3.8cqi, 0.7rem)" }}
+        >
           {deltaLabel}
         </div>
       ) : null}

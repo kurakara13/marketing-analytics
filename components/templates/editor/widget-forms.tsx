@@ -24,7 +24,11 @@ import {
   type TextWidgetConfig,
   type Widget,
 } from "@/lib/reports/templates/types";
-import { getAvailableMetrics } from "@/lib/reports/widgets/data-resolver";
+import {
+  COMPUTED_METRIC_DEFAULT_FORMAT,
+  COMPUTED_METRIC_LABELS,
+  getAvailableMetrics,
+} from "@/lib/reports/widgets/data-resolver";
 import { ImageUploadField } from "./image-upload-field";
 
 // ─── Form dispatcher ────────────────────────────────────────────────────
@@ -410,7 +414,14 @@ const DATA_SOURCE_OPTIONS: { value: DataSource; label: string }[] = [
   { value: "ga4", label: "Google Analytics 4" },
   { value: "google_ads", label: "Google Ads" },
   { value: "search_console", label: "Search Console" },
+  { value: "computed", label: "Computed (CPL, CTR, ROAS, …)" },
 ];
+
+// Human label for a metric — uses the COMPUTED_METRIC_LABELS map for
+// derived metrics, falls back to the raw id (e.g. "sessions") otherwise.
+function metricLabel(metric: string): string {
+  return COMPUTED_METRIC_LABELS[metric] ?? metric;
+}
 
 function KpiCardForm({
   config,
@@ -464,10 +475,18 @@ function KpiCardForm({
               if (!v) return;
               const next = v as DataSource;
               const newMetrics = getAvailableMetrics(next);
+              const newMetric = newMetrics[0] ?? config.metric;
+              // Auto-pick a sensible format when the user switches to
+              // a computed metric — CPL → Rupiah, CTR → percent, etc.
+              const newFormat =
+                next === "computed"
+                  ? (COMPUTED_METRIC_DEFAULT_FORMAT[newMetric] ?? config.format)
+                  : config.format;
               onChange({
                 ...config,
                 dataSource: next,
-                metric: newMetrics[0] ?? config.metric,
+                metric: newMetric,
+                format: newFormat,
               });
             }}
           >
@@ -486,7 +505,16 @@ function KpiCardForm({
         <Field label="Metric">
           <Select
             value={config.metric}
-            onValueChange={(v) => v && onChange({ ...config, metric: v })}
+            onValueChange={(v) => {
+              if (!v) return;
+              // For computed metrics, also nudge the format toward the
+              // sensible default (currency for CPL, percent for CTR).
+              const newFormat =
+                config.dataSource === "computed"
+                  ? (COMPUTED_METRIC_DEFAULT_FORMAT[v] ?? config.format)
+                  : config.format;
+              onChange({ ...config, metric: v, format: newFormat });
+            }}
           >
             <SelectTrigger size="sm">
               <SelectValue />
@@ -499,7 +527,7 @@ function KpiCardForm({
               ) : (
                 metrics.map((m) => (
                   <SelectItem key={m} value={m}>
-                    {m}
+                    {metricLabel(m)}
                   </SelectItem>
                 ))
               )}
@@ -605,7 +633,7 @@ function LineChartForm({
             <SelectContent>
               {metrics.map((m) => (
                 <SelectItem key={m} value={m}>
-                  {m}
+                  {metricLabel(m)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -846,7 +874,7 @@ function BarChartForm({
             <SelectContent>
               {metrics.map((m) => (
                 <SelectItem key={m} value={m}>
-                  {m}
+                  {metricLabel(m)}
                 </SelectItem>
               ))}
             </SelectContent>

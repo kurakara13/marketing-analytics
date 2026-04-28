@@ -43,6 +43,10 @@ export const dataSourceSchema = z.enum([
   "google_ads",
   "search_console",
   "google_business_profile",
+  // Synthetic source — no connector behind it. Resolves preset
+  // formulas (CPL, CPC, CTR, ROAS, conv_rate) by combining numbers
+  // already present in ReportTotals across the real sources above.
+  "computed",
 ]);
 export type DataSource = z.infer<typeof dataSourceSchema>;
 
