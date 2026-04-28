@@ -8,6 +8,10 @@ import "./line-chart";
 import "./bar-chart";
 import "./image";
 import "./shape";
+import "./divider";
+import "./spacer";
+import "./cover-block";
+import "./table";
 import "./ai-narrative";
 
 // Re-export the lookup API so callers can `import { getWidgetDefinition }

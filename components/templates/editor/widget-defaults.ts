@@ -46,7 +46,7 @@ export const WIDGET_PALETTE_ITEMS: PaletteItem[] = [
     label: "Cover Block",
     description: "Title + subtitle + tanggal untuk slide cover.",
     category: "layout",
-    enabled: false,
+    enabled: true,
   },
   {
     type: "image",
@@ -67,14 +67,14 @@ export const WIDGET_PALETTE_ITEMS: PaletteItem[] = [
     label: "Divider",
     description: "Garis horizontal/vertikal untuk pemisah.",
     category: "layout",
-    enabled: false,
+    enabled: true,
   },
   {
     type: "spacer",
     label: "Spacer",
-    description: "Spacing kosong untuk layout.",
+    description: "Spacing kosong untuk layout (tidak terlihat di PPT).",
     category: "layout",
-    enabled: false,
+    enabled: true,
   },
   // Data
   {
@@ -103,7 +103,7 @@ export const WIDGET_PALETTE_ITEMS: PaletteItem[] = [
     label: "Table",
     description: "Top N rows by metric (campaigns, pages, dst).",
     category: "data",
-    enabled: false,
+    enabled: true,
   },
   // AI
   {
