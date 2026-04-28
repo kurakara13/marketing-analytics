@@ -1,7 +1,7 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { insightFeedback, type InsightFeedback } from "@/lib/db/schema";
+import { insights, insightFeedback, type InsightFeedback } from "@/lib/db/schema";
 
 export type FeedbackKind = "observation" | "recommendation";
 export type FeedbackRating = -1 | 0 | 1;
@@ -48,6 +48,72 @@ function normalizeRating(n: number): FeedbackRating {
   if (n > 0) return 1;
   if (n < 0) return -1;
   return 0;
+}
+
+/**
+ * Aggregated feedback signal fed back into the AI prompt. Lists the
+ * top liked and disliked observations/recommendations with their full
+ * title + description so the model can pattern-match the style and
+ * angle the user prefers (and avoid the angles they've explicitly
+ * down-rated).
+ *
+ * "Top" = most recent, capped at MAX_PER_BUCKET. We resolve each
+ * (insightId, kind, itemIndex) tuple back to the original text by
+ * joining against the insight rows so the prompt has substance, not
+ * just numeric ids.
+ */
+export type FeedbackSummary = {
+  liked: Array<{ kind: FeedbackKind; title: string; description: string }>;
+  disliked: Array<{ kind: FeedbackKind; title: string; description: string }>;
+};
+
+const MAX_PER_BUCKET = 5;
+
+export async function getUserFeedbackSummary(
+  userId: string,
+): Promise<FeedbackSummary> {
+  const rows = await db
+    .select({
+      kind: insightFeedback.kind,
+      itemIndex: insightFeedback.itemIndex,
+      rating: insightFeedback.rating,
+      observations: insights.observations,
+      recommendations: insights.recommendations,
+      updatedAt: insightFeedback.updatedAt,
+    })
+    .from(insightFeedback)
+    .innerJoin(insights, eq(insightFeedback.insightId, insights.id))
+    .where(eq(insightFeedback.userId, userId))
+    .orderBy(desc(insightFeedback.updatedAt))
+    .limit(50);
+
+  const liked: FeedbackSummary["liked"] = [];
+  const disliked: FeedbackSummary["disliked"] = [];
+
+  for (const row of rows) {
+    const list =
+      row.kind === "observation" ? row.observations : row.recommendations;
+    const item = list?.[row.itemIndex];
+    if (!item) continue;
+
+    const entry = {
+      kind: row.kind as FeedbackKind,
+      title: item.title,
+      description: item.description,
+    };
+
+    if (row.rating > 0 && liked.length < MAX_PER_BUCKET) {
+      liked.push(entry);
+    } else if (row.rating < 0 && disliked.length < MAX_PER_BUCKET) {
+      disliked.push(entry);
+    }
+
+    if (liked.length >= MAX_PER_BUCKET && disliked.length >= MAX_PER_BUCKET) {
+      break;
+    }
+  }
+
+  return { liked, disliked };
 }
 
 /**

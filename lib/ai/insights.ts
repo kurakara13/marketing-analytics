@@ -6,6 +6,10 @@ import { insights, type Insight } from "@/lib/db/schema";
 import type { ReportData } from "@/lib/reports/fetch-report-data";
 import { getBusinessContext } from "@/lib/business-context";
 import type { UserBusinessContext } from "@/lib/db/schema";
+import {
+  getUserFeedbackSummary,
+  type FeedbackSummary,
+} from "@/lib/insight-feedback";
 import { INSIGHTS_SYSTEM_PROMPT } from "./prompts";
 
 // Provider: OpenAI. We picked GPT-5 over Claude / Gemini for the
@@ -125,6 +129,34 @@ function fmtDelta(current: number, previous: number): string {
 // Sections are conditional — we only include data the user has
 // connected. Skipped sections are tagged "(belum tersedia)" so the
 // model doesn't hallucinate numbers for missing sources.
+function buildFeedbackBlock(summary: FeedbackSummary): string {
+  if (summary.liked.length === 0 && summary.disliked.length === 0) return "";
+
+  const fmt = (e: { kind: string; title: string; description: string }) =>
+    `- [${e.kind === "observation" ? "obs" : "rec"}] **${e.title}** — ${e.description.slice(0, 220)}${e.description.length > 220 ? "…" : ""}`;
+
+  const blocks: string[] = ["## Feedback dari user pada insight sebelumnya"];
+
+  if (summary.liked.length > 0) {
+    blocks.push(
+      `\n### Yang user anggap berguna (👍, ${summary.liked.length}):`,
+      summary.liked.map(fmt).join("\n"),
+    );
+  }
+  if (summary.disliked.length > 0) {
+    blocks.push(
+      `\n### Yang user tandai kurang relevan / generic (👎, ${summary.disliked.length}):`,
+      summary.disliked.map(fmt).join("\n"),
+    );
+  }
+
+  blocks.push(
+    "\nGunakan sinyal ini: condongkan observation/rekomendasi ke angle, granularitas, dan tone seperti yang berguna; hindari pattern yang ditandai kurang relevan. Jangan duplikasi kata-katanya — angle dan kedalaman analisisnya yang dicontoh.",
+  );
+
+  return blocks.join("\n") + "\n\n";
+}
+
 function buildBusinessContextBlock(
   ctx: UserBusinessContext | null,
 ): string {
@@ -154,6 +186,7 @@ function buildBusinessContextBlock(
 function buildUserPrompt(
   reportData: ReportData,
   businessContext: UserBusinessContext | null,
+  feedbackSummary: FeedbackSummary,
 ): string {
   const { totals, previousTotals, trend, campaigns, connectedSources } =
     reportData;
@@ -281,7 +314,7 @@ function buildUserPrompt(
 
   return `Analisis data marketing berikut dan kembalikan insight dalam JSON terstruktur.
 
-${buildBusinessContextBlock(businessContext)}## Periode laporan
+${buildBusinessContextBlock(businessContext)}${buildFeedbackBlock(feedbackSummary)}## Periode laporan
 ${reportData.windowLabel} (${reportData.windowStart} → ${reportData.windowEnd})
 Type: ${reportData.period}
 
@@ -330,8 +363,15 @@ export async function generateInsight(args: {
     );
   }
 
-  const businessContext = await getBusinessContext(userId);
-  const userPrompt = buildUserPrompt(reportData, businessContext);
+  const [businessContext, feedbackSummary] = await Promise.all([
+    getBusinessContext(userId),
+    getUserFeedbackSummary(userId),
+  ]);
+  const userPrompt = buildUserPrompt(
+    reportData,
+    businessContext,
+    feedbackSummary,
+  );
 
   const client = getClient();
   const response = await client.chat.completions.create({
