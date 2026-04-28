@@ -4,11 +4,15 @@ import { useMemo } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
   BarChart3,
+  BringToFront,
+  ChevronsDown,
+  ChevronsUp,
   Heading,
   Image as ImageIcon,
   LayoutTemplate,
   LineChart,
   Minus,
+  SendToBack,
   Sparkles,
   Square,
   Table,
@@ -32,12 +36,15 @@ import {
 } from "./widget-defaults";
 import { WidgetConfigForm } from "./widget-forms";
 
+type ZOrderAction = "forward" | "backward" | "front" | "back";
+
 type Props = {
   slide: Slide | null;
   selectedWidget: Widget | null;
   onAddWidget: (widget: Widget) => void;
   onUpdateWidget: (id: string, updater: (w: Widget) => Widget) => void;
   onDeleteWidget: (id: string) => void;
+  onMoveWidget: (id: string, action: ZOrderAction) => void;
   onClearSelection: () => void;
 };
 
@@ -67,6 +74,7 @@ export function WidgetSidePanel({
   onAddWidget,
   onUpdateWidget,
   onDeleteWidget,
+  onMoveWidget,
   onClearSelection,
 }: Props) {
   // No slide selected — empty state
@@ -79,6 +87,13 @@ export function WidgetSidePanel({
       </PanelShell>
     );
   }
+
+  // Index of the selected widget within its slide. Used to disable the
+  // forward/back buttons when already at the top/bottom of the stack.
+  const selectedIndex = selectedWidget
+    ? slide.widgets.findIndex((w) => w.id === selectedWidget.id)
+    : -1;
+  const widgetCount = slide.widgets.length;
 
   return (
     <PanelShell>
@@ -94,8 +109,11 @@ export function WidgetSidePanel({
           >
             <WidgetConfigPanel
               widget={selectedWidget}
+              selectedIndex={selectedIndex}
+              widgetCount={widgetCount}
               onUpdate={(updater) => onUpdateWidget(selectedWidget.id, updater)}
               onDelete={() => onDeleteWidget(selectedWidget.id)}
+              onMove={(action) => onMoveWidget(selectedWidget.id, action)}
               onClose={onClearSelection}
             />
           </motion.div>
@@ -249,13 +267,19 @@ function WidgetPalette({ onAdd }: { onAdd: (widget: Widget) => void }) {
 // ─── Config Panel ───────────────────────────────────────────────────────
 function WidgetConfigPanel({
   widget,
+  selectedIndex,
+  widgetCount,
   onUpdate,
   onDelete,
+  onMove,
   onClose,
 }: {
   widget: Widget;
+  selectedIndex: number;
+  widgetCount: number;
   onUpdate: (updater: (w: Widget) => Widget) => void;
   onDelete: () => void;
+  onMove: (action: ZOrderAction) => void;
   onClose: () => void;
 }) {
   const Icon = ICONS[widget.type];
@@ -271,6 +295,9 @@ function WidgetConfigPanel({
     table: "Table",
     ai_narrative: "AI Insight",
   };
+
+  const isFirst = selectedIndex <= 0;
+  const isLast = selectedIndex >= widgetCount - 1;
 
   return (
     <>
@@ -299,6 +326,44 @@ function WidgetConfigPanel({
         </motion.button>
       </div>
 
+      {/* Layer order toolbar */}
+      <div className="bg-muted/20 flex items-center gap-1 border-b border-border/60 px-3 py-2">
+        <span className="text-muted-foreground mr-1 text-[10px] font-semibold uppercase tracking-[0.08em]">
+          Layer
+        </span>
+        <ZOrderButton
+          label="Send to back"
+          shortcut="⌘⇧["
+          icon={SendToBack}
+          disabled={isFirst}
+          onClick={() => onMove("back")}
+        />
+        <ZOrderButton
+          label="Send backward"
+          shortcut="⌘["
+          icon={ChevronsDown}
+          disabled={isFirst}
+          onClick={() => onMove("backward")}
+        />
+        <ZOrderButton
+          label="Bring forward"
+          shortcut="⌘]"
+          icon={ChevronsUp}
+          disabled={isLast}
+          onClick={() => onMove("forward")}
+        />
+        <ZOrderButton
+          label="Bring to front"
+          shortcut="⌘⇧]"
+          icon={BringToFront}
+          disabled={isLast}
+          onClick={() => onMove("front")}
+        />
+        <span className="text-muted-foreground/70 ml-auto text-[10px] tabular-nums">
+          {selectedIndex + 1} / {widgetCount}
+        </span>
+      </div>
+
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
         <WidgetConfigForm widget={widget} onUpdate={onUpdate} />
       </div>
@@ -316,5 +381,35 @@ function WidgetConfigPanel({
         </Button>
       </div>
     </>
+  );
+}
+
+function ZOrderButton({
+  label,
+  shortcut,
+  icon: Icon,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  shortcut: string;
+  icon: typeof Type;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      whileHover={disabled ? undefined : { scale: 1.05 }}
+      whileTap={disabled ? undefined : { scale: 0.92 }}
+      transition={SPRING}
+      title={`${label} (${shortcut})`}
+      aria-label={label}
+      className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex size-7 items-center justify-center rounded-md transition-colors disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+    >
+      <Icon className="size-3.5" />
+    </motion.button>
   );
 }

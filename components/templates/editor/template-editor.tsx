@@ -198,6 +198,45 @@ export function TemplateEditor({
     [selectedSlide, updateDefinition],
   );
 
+  // ─── Z-order ──────────────────────────────────────────────────────────
+  // Widgets render in array order — first item is bottom layer, last is
+  // top. "forward/backward" shift one step; "front/back" jump to the
+  // ends. Both PPTX renderer and the canvas honor this order.
+  const handleMoveWidget = useCallback(
+    (
+      widgetId: string,
+      action: "forward" | "backward" | "front" | "back",
+    ) => {
+      if (!selectedSlide) return;
+      updateDefinition((d) => ({
+        ...d,
+        slides: d.slides.map((s) => {
+          if (s.id !== selectedSlide.id) return s;
+          const idx = s.widgets.findIndex((w) => w.id === widgetId);
+          if (idx < 0) return s;
+          const next = [...s.widgets];
+          const [w] = next.splice(idx, 1);
+          switch (action) {
+            case "forward":
+              next.splice(Math.min(next.length, idx + 1), 0, w);
+              break;
+            case "backward":
+              next.splice(Math.max(0, idx - 1), 0, w);
+              break;
+            case "front":
+              next.push(w);
+              break;
+            case "back":
+              next.unshift(w);
+              break;
+          }
+          return { ...s, widgets: next };
+        }),
+      }));
+    },
+    [selectedSlide, updateDefinition],
+  );
+
   // ─── Save ─────────────────────────────────────────────────────────────
   // Wrap save in a stable ref so the autosave effect can call it without
   // including it in deps (which would re-trigger on every state change).
@@ -280,11 +319,26 @@ export function TemplateEditor({
       ) {
         e.preventDefault();
         handleDeleteWidget(selectedWidgetId);
+        return;
+      }
+
+      // Z-order: Cmd+] forward, Cmd+[ backward, +Shift = front/back.
+      if ((e.metaKey || e.ctrlKey) && selectedWidgetId) {
+        if (e.key === "]") {
+          e.preventDefault();
+          handleMoveWidget(selectedWidgetId, e.shiftKey ? "front" : "forward");
+          return;
+        }
+        if (e.key === "[") {
+          e.preventDefault();
+          handleMoveWidget(selectedWidgetId, e.shiftKey ? "back" : "backward");
+          return;
+        }
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedWidgetId, handleDeleteWidget]);
+  }, [selectedWidgetId, handleDeleteWidget, handleMoveWidget]);
 
   return (
     <EditorProvider templateId={templateId}>
@@ -380,6 +434,7 @@ export function TemplateEditor({
           onAddWidget={handleAddWidget}
           onUpdateWidget={handleUpdateWidget}
           onDeleteWidget={handleDeleteWidget}
+          onMoveWidget={handleMoveWidget}
           onClearSelection={() => setSelectedWidgetId(null)}
         />
       </div>

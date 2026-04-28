@@ -77,7 +77,11 @@ export const imageWidgetConfigSchema = z.object({
   // Path relative to ./uploads/ root; nullable until user picks an image.
   imagePath: z.string().nullable().default(null),
   altText: z.string().default(""),
-  fit: z.enum(["contain", "cover"]).default("contain"),
+  // Default to "cover" (fill the box, may crop) — most uploads are
+  // photos used as backgrounds where covering looks intentional.
+  // Logos and assets where cropping is wrong should be switched to
+  // "contain" via the config form.
+  fit: z.enum(["contain", "cover"]).default("cover"),
 });
 export type ImageWidgetConfig = z.infer<typeof imageWidgetConfigSchema>;
 
