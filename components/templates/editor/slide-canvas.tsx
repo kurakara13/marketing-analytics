@@ -14,12 +14,15 @@ import { CanvasWidgetPreview } from "./canvas-widget-preview";
 const SLIDE_W_INCHES = 13.333;
 const SLIDE_H_INCHES = 7.5;
 const SNAP_INCHES = 0.05; // 0.05" snap step
-// Padding around the canvas inside its container, in pixels.
-const CONTAINER_PADDING = 32;
+// Padding around the canvas inside its container, in pixels. Kept
+// tight so the canvas takes most of the available cell — the breathing
+// room is provided by the editor-level grid gap, not here.
+const CONTAINER_PADDING = 16;
 // Hard floor / ceiling so very narrow or very wide viewports still
-// render something sane.
+// render something sane. The ceiling matters most: on a 4K monitor we
+// don't want the canvas blown up beyond useful resolution.
 const MIN_PX_PER_INCH = 50;
-const MAX_PX_PER_INCH = 130;
+const MAX_PX_PER_INCH = 180;
 
 type Props = {
   slide: Slide | null;
@@ -82,7 +85,7 @@ export function SlideCanvas({
     <div
       ref={containerRef}
       className={cn(
-        "relative flex min-h-0 items-center justify-center overflow-auto rounded-xl border border-border/60 p-10",
+        "relative flex min-h-0 items-center justify-center overflow-auto rounded-xl border border-border/60 p-4",
         // Subtle radial backdrop so the canvas pops slightly off the page.
         "bg-[radial-gradient(circle_at_50%_30%,rgba(15,23,42,0.04),transparent_70%)]",
       )}
@@ -127,7 +130,7 @@ export function SlideCanvas({
           ))}
         </AnimatePresence>
 
-        {slide.widgets.length === 0 ? (
+        {slide.widgets.length === 0 && !slide.backgroundImage ? (
           <motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
