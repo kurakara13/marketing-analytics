@@ -1,16 +1,24 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Rnd } from "react-rnd";
 
 import { cn } from "@/lib/utils";
 import type { Slide, Widget } from "@/lib/reports/templates/types";
 import { CanvasWidgetPreview } from "./canvas-widget-preview";
 
-// PPT slide is 13.333" × 7.5" (16:9). We pick a CSS pixel ratio that
-// lets the canvas fit inside most laptop viewports comfortably.
-const PX_PER_INCH = 70; // 933 × 525 px canvas
-const SNAP = 0.05; // inches — translates to a snap-to-grid step
+// PPT slide is 13.333" × 7.5" (16:9 widescreen). The canvas mirrors
+// these proportions exactly; pxPerInch is computed at runtime to fit
+// the available viewport.
+const SLIDE_W_INCHES = 13.333;
+const SLIDE_H_INCHES = 7.5;
+const SNAP_INCHES = 0.05; // 0.05" snap step
+// Padding around the canvas inside its container, in pixels.
+const CONTAINER_PADDING = 32;
+// Hard floor / ceiling so very narrow or very wide viewports still
+// render something sane.
+const MIN_PX_PER_INCH = 50;
+const MAX_PX_PER_INCH = 130;
 
 type Props = {
   slide: Slide | null;
@@ -28,8 +36,38 @@ export function SlideCanvas({
   onSelectWidget,
   onUpdateWidget,
 }: Props) {
-  const canvasW = 13.333 * PX_PER_INCH;
-  const canvasH = 7.5 * PX_PER_INCH;
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [pxPerInch, setPxPerInch] = useState(70);
+
+  // Recompute pxPerInch whenever the container resizes. Picks the
+  // largest scale that fits the canvas (with padding) in both width
+  // and height, clamped to MIN/MAX so the canvas doesn't get absurdly
+  // small on a side panel or absurdly large on a 4K monitor.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    function recompute() {
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const availableW = Math.max(0, rect.width - CONTAINER_PADDING * 2);
+      const availableH = Math.max(0, rect.height - CONTAINER_PADDING * 2);
+      const byWidth = availableW / SLIDE_W_INCHES;
+      const byHeight = availableH / SLIDE_H_INCHES;
+      const fit = Math.min(byWidth, byHeight);
+      const clamped = Math.max(MIN_PX_PER_INCH, Math.min(MAX_PX_PER_INCH, fit));
+      setPxPerInch(Math.round(clamped));
+    }
+
+    recompute();
+
+    const observer = new ResizeObserver(recompute);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const canvasW = SLIDE_W_INCHES * pxPerInch;
+  const canvasH = SLIDE_H_INCHES * pxPerInch;
 
   if (!slide) {
     return (
@@ -40,7 +78,10 @@ export function SlideCanvas({
   }
 
   return (
-    <div className="bg-muted/40 relative flex min-h-0 items-center justify-center overflow-auto rounded-md border p-6">
+    <div
+      ref={containerRef}
+      className="bg-muted/40 relative flex min-h-0 items-center justify-center overflow-auto rounded-md border p-8"
+    >
       <div
         className="relative shadow-md"
         style={{
@@ -49,7 +90,7 @@ export function SlideCanvas({
           backgroundColor: `#${slide.background}`,
           backgroundImage:
             "linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px)",
-          backgroundSize: `${PX_PER_INCH}px ${PX_PER_INCH}px`,
+          backgroundSize: `${pxPerInch}px ${pxPerInch}px`,
         }}
         onClick={(e) => {
           // Clicking empty canvas = deselect.
@@ -65,7 +106,7 @@ export function SlideCanvas({
             isSelected={widget.id === selectedWidgetId}
             onSelect={() => onSelectWidget(widget.id)}
             onUpdate={(updater) => onUpdateWidget(widget.id, updater)}
-            pxPerInch={PX_PER_INCH}
+            pxPerInch={pxPerInch}
           />
         ))}
 
@@ -74,6 +115,12 @@ export function SlideCanvas({
             Slide kosong — tambah widget dari panel kanan.
           </div>
         ) : null}
+
+        {/* Scale indicator (bottom-right corner of canvas) */}
+        <div className="text-muted-foreground absolute -bottom-6 right-0 text-[10px] font-mono">
+          {Math.round(pxPerInch)} px/inch · {Math.round(canvasW)}×
+          {Math.round(canvasH)} px
+        </div>
       </div>
     </div>
   );
@@ -93,7 +140,7 @@ function CanvasWidget({
   onUpdate: (updater: (w: Widget) => Widget) => void;
   pxPerInch: number;
 }) {
-  const snapPx = SNAP * pxPerInch;
+  const snapPx = SNAP_INCHES * pxPerInch;
 
   // Convert position from inches to pixels for Rnd, and back on save.
   const positionPx = useMemo(
@@ -118,21 +165,43 @@ function CanvasWidget({
           ...w,
           position: {
             ...w.position,
-            x: clamp(roundTo(d.x / pxPerInch, SNAP), 0, 13.333 - w.position.w),
-            y: clamp(roundTo(d.y / pxPerInch, SNAP), 0, 7.5 - w.position.h),
+            x: clamp(
+              roundTo(d.x / pxPerInch, SNAP_INCHES),
+              0,
+              SLIDE_W_INCHES - w.position.w,
+            ),
+            y: clamp(
+              roundTo(d.y / pxPerInch, SNAP_INCHES),
+              0,
+              SLIDE_H_INCHES - w.position.h,
+            ),
           },
         }));
       }}
       onResizeStop={(_, __, ref, ___, pos) => {
-        const newW = roundTo(parseFloat(ref.style.width) / pxPerInch, SNAP);
-        const newH = roundTo(parseFloat(ref.style.height) / pxPerInch, SNAP);
+        const newW = roundTo(
+          parseFloat(ref.style.width) / pxPerInch,
+          SNAP_INCHES,
+        );
+        const newH = roundTo(
+          parseFloat(ref.style.height) / pxPerInch,
+          SNAP_INCHES,
+        );
         onUpdate((w) => ({
           ...w,
           position: {
-            x: clamp(roundTo(pos.x / pxPerInch, SNAP), 0, 13.333 - newW),
-            y: clamp(roundTo(pos.y / pxPerInch, SNAP), 0, 7.5 - newH),
-            w: clamp(newW, 0.1, 13.333),
-            h: clamp(newH, 0.1, 7.5),
+            x: clamp(
+              roundTo(pos.x / pxPerInch, SNAP_INCHES),
+              0,
+              SLIDE_W_INCHES - newW,
+            ),
+            y: clamp(
+              roundTo(pos.y / pxPerInch, SNAP_INCHES),
+              0,
+              SLIDE_H_INCHES - newH,
+            ),
+            w: clamp(newW, 0.1, SLIDE_W_INCHES),
+            h: clamp(newH, 0.1, SLIDE_H_INCHES),
           },
         }));
       }}

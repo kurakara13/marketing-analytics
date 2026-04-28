@@ -190,7 +190,7 @@ export function TemplateEditor({
   }, [isDirty, templateId]);
 
   return (
-    <div className="flex h-[calc(100vh-3rem)] flex-col gap-3">
+    <div className="flex h-full min-h-0 flex-1 flex-col gap-3">
       {/* Header / toolbar */}
       <div className="flex flex-wrap items-center gap-3 border-b pb-3">
         <Link
