@@ -170,9 +170,15 @@ export function SlideCanvas({
         "bg-[radial-gradient(circle_at_50%_30%,rgba(15,23,42,0.04),transparent_70%)]",
       )}
     >
-      <motion.div
-        layout
-        transition={{ duration: 0.25, ease: "easeOut" }}
+      {/* Plain div, NOT motion.div with layout — when the user zooms,
+          pxPerInch changes and so do canvasW/canvasH plus every widget's
+          pixel position. Animating the canvas dimensions with a 250 ms
+          transition while child widget positions update synchronously
+          made widgets briefly appear at the new (zoomed) positions
+          before the canvas had finished resizing — the layout looked
+          broken mid-transition. Updating instantly in lockstep with
+          the widgets keeps zoom visually crisp. */}
+      <div
         className="relative ring-1 ring-black/5 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.18)]"
         style={{
           width: canvasW,
@@ -226,7 +232,7 @@ export function SlideCanvas({
             </p>
           </motion.div>
         ) : null}
-      </motion.div>
+      </div>
 
       {/* Scale info: bottom-left, doesn't scroll with canvas */}
       <div className="text-muted-foreground/70 pointer-events-none absolute bottom-2 left-3 select-none font-mono text-[10px]">
