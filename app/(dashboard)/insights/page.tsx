@@ -27,7 +27,7 @@ export default async function InsightsPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Insights</h1>
           <p className="text-muted-foreground text-sm">
-            Analisis data marketing Anda dengan Claude. Setiap generate
+            Analisis data marketing Anda dengan AI. Setiap generate
             menghasilkan ringkasan, observasi, dan rekomendasi yang actionable.
           </p>
         </div>
