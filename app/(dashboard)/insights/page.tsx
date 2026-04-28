@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { auth } from "@/lib/auth";
 import { listInsightsForUser } from "@/lib/ai/insights";
+import { getFeedbackForInsight } from "@/lib/insight-feedback";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -20,6 +21,16 @@ export default async function InsightsPage() {
   if (!session?.user?.id) redirect("/login");
 
   const insights = await listInsightsForUser(session.user.id);
+
+  // Pull all feedback rows in parallel — one query per insight is fine
+  // for the 20-row limit. Switch to a batched IN-list query if list
+  // grows beyond ~50.
+  const userId = session.user.id;
+  const feedbackPerInsight = await Promise.all(
+    insights.map((i) =>
+      getFeedbackForInsight({ userId, insightId: i.id }),
+    ),
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -64,6 +75,7 @@ export default async function InsightsPage() {
                 key={insight.id}
                 insight={insight}
                 previousInsightId={previousInsightId}
+                feedback={feedbackPerInsight[idx]}
               />
             );
           })}

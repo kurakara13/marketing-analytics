@@ -24,6 +24,11 @@ import type {
   InsightObservation,
   InsightRecommendation,
 } from "@/lib/db/schema";
+import {
+  feedbackKey,
+  type InsightFeedbackMap,
+} from "@/lib/insight-feedback";
+import { FeedbackButtons } from "./feedback-buttons";
 
 const SEVERITY_STYLES: Record<
   InsightObservation["severity"],
@@ -72,6 +77,7 @@ const PRIORITY_STYLES: Record<
 export function InsightCard({
   insight,
   previousInsightId,
+  feedback,
 }: {
   insight: Insight;
   /** When set, renders a "Bandingkan" button that links to the
@@ -79,6 +85,12 @@ export function InsightCard({
    *  one as `b` (older). Pass null to hide — typically used when there's
    *  no previous insight to compare against. */
   previousInsightId?: string | null;
+  /** Initial feedback ratings the user has already left on this
+   *  insight's observations / recommendations. Lookup by
+   *  `feedbackKey({kind, itemIndex})`. When omitted, all items render
+   *  in neutral state — useful for read-only contexts (e.g. compare
+   *  page) where we don't want feedback widgets. */
+  feedback?: InsightFeedbackMap;
 }) {
   const ago = formatDistanceToNow(insight.createdAt, {
     addSuffix: true,
@@ -127,6 +139,9 @@ export function InsightCard({
                 {insight.observations.map((o, i) => {
                   const style = SEVERITY_STYLES[o.severity];
                   const Icon = style.icon;
+                  const rating = feedback?.get(
+                    feedbackKey({ kind: "observation", itemIndex: i }),
+                  ) ?? 0;
                   return (
                     <li
                       key={i}
@@ -137,7 +152,15 @@ export function InsightCard({
                     >
                       <div className="mb-1 flex items-center gap-2 font-medium">
                         <Icon className="size-4 shrink-0" />
-                        {o.title}
+                        <span className="min-w-0 flex-1">{o.title}</span>
+                        {feedback ? (
+                          <FeedbackButtons
+                            insightId={insight.id}
+                            kind="observation"
+                            itemIndex={i}
+                            initialRating={rating}
+                          />
+                        ) : null}
                       </div>
                       <p className="text-foreground/90 text-sm leading-relaxed">
                         {o.description}
@@ -160,6 +183,9 @@ export function InsightCard({
               <ul className="space-y-2">
                 {insight.recommendations.map((r, i) => {
                   const style = PRIORITY_STYLES[r.priority];
+                  const rating = feedback?.get(
+                    feedbackKey({ kind: "recommendation", itemIndex: i }),
+                  ) ?? 0;
                   return (
                     <li
                       key={i}
@@ -174,7 +200,15 @@ export function InsightCard({
                         >
                           {style.label}
                         </span>
-                        {r.title}
+                        <span className="min-w-0 flex-1">{r.title}</span>
+                        {feedback ? (
+                          <FeedbackButtons
+                            insightId={insight.id}
+                            kind="recommendation"
+                            itemIndex={i}
+                            initialRating={rating}
+                          />
+                        ) : null}
                       </div>
                       <p className="text-foreground/90 text-sm leading-relaxed">
                         {r.description}
