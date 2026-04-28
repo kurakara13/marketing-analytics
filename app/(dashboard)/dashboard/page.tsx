@@ -13,7 +13,9 @@ import {
 import { auth } from "@/lib/auth";
 import { getCampaignBreakdown, getMetricsSummary } from "@/lib/metrics-queries";
 import { getOnboardingSteps } from "@/lib/onboarding";
+import { listInsightsForUser } from "@/lib/ai/insights";
 import { OnboardingChecklist } from "@/components/onboarding/onboarding-checklist";
+import { MorningBrief } from "@/components/dashboard/morning-brief";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -47,12 +49,15 @@ export default async function DashboardPage({
   const windowDays = parseDaysParam(params?.days);
 
   const greetingName = session.user.name ?? session.user.email ?? "";
-  const [summary, campaignRows, onboardingSteps] = await Promise.all([
-    getMetricsSummary({ userId: session.user.id, days: windowDays }),
-    getCampaignBreakdown({ userId: session.user.id, days: windowDays }),
-    getOnboardingSteps(session.user.id),
-  ]);
+  const [summary, campaignRows, onboardingSteps, recentInsights] =
+    await Promise.all([
+      getMetricsSummary({ userId: session.user.id, days: windowDays }),
+      getCampaignBreakdown({ userId: session.user.id, days: windowDays }),
+      getOnboardingSteps(session.user.id),
+      listInsightsForUser(session.user.id),
+    ]);
   const onboardingComplete = onboardingSteps.every((s) => s.done);
+  const latestInsight = recentInsights[0] ?? null;
 
   if (summary.connectedSources === 0) {
     // Brand-new user — show the full onboarding hero instead of the
@@ -135,6 +140,8 @@ export default async function DashboardPage({
       {!onboardingComplete ? (
         <OnboardingChecklist steps={onboardingSteps} variant="compact" />
       ) : null}
+
+      {latestInsight ? <MorningBrief insight={latestInsight} /> : null}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
