@@ -296,22 +296,25 @@ function KpiCardPreview({ config }: { config: KpiCardWidgetConfig }) {
     }
   }
 
-  // CSS container queries do the heavy lifting here:
+  // CSS container queries handle the responsive type:
   //
   //   container-type: inline-size      → makes this card the container
   //   font-size: clamp(min, X cqi, max) → font scales with card width
   //
-  // cqi = 1% of container's inline (horizontal) size. Numbers tuned
-  // so a 2.95"-wide card at ~85 px/in (~250 px) renders the value at
-  // ~22 px (close to the original text-lg) but a half-width card
-  // shrinks the value cleanly instead of truncating it.
+  // Layout is intentionally `justify-start` (not space-between): label /
+  // value / delta stack snugly from the top with a small gap. When the
+  // card is taller than its content (the default 1.4" position is fairly
+  // generous), the bottom is empty whitespace instead of three lines
+  // floating apart. `overflow-hidden` clips anything that doesn't fit
+  // — a clear visual signal that the user should resize the card
+  // bigger, rather than letting text spill outside the widget bounds.
   return (
     <div
-      className="bg-card flex h-full w-full flex-col justify-between gap-[3cqi] border p-[6cqi]"
+      className="bg-card flex h-full w-full flex-col items-start justify-start gap-[2.5cqi] overflow-hidden border p-[5cqi]"
       style={{ containerType: "inline-size" }}
     >
       <div
-        className="text-muted-foreground font-bold uppercase leading-tight"
+        className="text-muted-foreground w-full font-bold uppercase leading-tight"
         style={{
           fontSize: "clamp(0.55rem, 4.5cqi, 0.75rem)",
           letterSpacing: "0.04em",
@@ -320,14 +323,14 @@ function KpiCardPreview({ config }: { config: KpiCardWidgetConfig }) {
         {config.label}
       </div>
       <div
-        className="text-foreground font-bold leading-tight"
-        style={{ fontSize: "clamp(0.85rem, 9cqi, 1.75rem)" }}
+        className="text-foreground w-full truncate font-bold leading-tight"
+        style={{ fontSize: "clamp(0.95rem, 11cqi, 2rem)" }}
       >
         {displayValue}
       </div>
       {deltaLabel ? (
         <div
-          className="text-muted-foreground leading-tight"
+          className="text-muted-foreground w-full leading-tight"
           style={{ fontSize: "clamp(0.5rem, 3.8cqi, 0.7rem)" }}
         >
           {deltaLabel}
