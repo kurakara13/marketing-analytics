@@ -70,11 +70,22 @@ export const insights = pgTable(
 
     modelUsed: text("model_used").notNull(),
 
+    /** When set, the insight is publicly viewable at /share/insight/<token>
+     *  without authentication. Null = sharing disabled. Token is a
+     *  random 32-byte hex string generated at enable time; revoke =
+     *  set back to null (link 404s). */
+    shareToken: text("share_token"),
+
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
       .notNull()
       .defaultNow(),
   },
-  (t) => [index("insight_user_created_idx").on(t.userId, t.createdAt)],
+  (t) => [
+    index("insight_user_created_idx").on(t.userId, t.createdAt),
+    // Unique partial index — only enforces uniqueness on non-null
+    // tokens, so revoked rows (token=null) don't collide.
+    index("insight_share_token_idx").on(t.shareToken),
+  ],
 );
 
 export type Insight = typeof insights.$inferSelect;

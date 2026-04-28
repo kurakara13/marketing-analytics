@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/lib/db";
@@ -585,6 +586,63 @@ export async function findLatestInsight(args: {
     orderBy: (insight, { desc }) => [desc(insight.createdAt)],
   });
   return row ?? null;
+}
+
+/**
+ * Public lookup by share token. NOT scoped by userId — that's the whole
+ * point: anyone with the token can read the insight. Returns null when
+ * the token doesn't match any row (revoked or never enabled).
+ */
+export async function findInsightByShareToken(
+  token: string,
+): Promise<Insight | null> {
+  if (!token) return null;
+  const row = await db.query.insights.findFirst({
+    where: (insight, { eq }) => eq(insight.shareToken, token),
+  });
+  return row ?? null;
+}
+
+/**
+ * Generate or rotate a share token for an insight. Returns the token
+ * after persisting it. Rotation = call again, you get a new token and
+ * the old one stops working immediately. userId-scoped so a leaked
+ * insight id can't be used to enable sharing on someone else's row.
+ */
+export async function enableInsightSharing(args: {
+  userId: string;
+  insightId: string;
+}): Promise<string> {
+  // 64 hex chars = 256 bits of entropy. Plenty of unguessability
+  // without the URL becoming unmanageable.
+  const token =
+    crypto.randomUUID().replace(/-/g, "") +
+    crypto.randomUUID().replace(/-/g, "");
+  const [row] = await db
+    .update(insights)
+    .set({ shareToken: token })
+    .where(
+      and(eq(insights.id, args.insightId), eq(insights.userId, args.userId)),
+    )
+    .returning({ id: insights.id });
+  if (!row) throw new Error("Insight tidak ditemukan");
+  return token;
+}
+
+/**
+ * Revoke an active share token. Subsequent lookups by the old token
+ * 404. No-op when sharing was already disabled.
+ */
+export async function revokeInsightSharing(args: {
+  userId: string;
+  insightId: string;
+}): Promise<void> {
+  await db
+    .update(insights)
+    .set({ shareToken: null })
+    .where(
+      and(eq(insights.id, args.insightId), eq(insights.userId, args.userId)),
+    );
 }
 
 export async function listInsightsForUser(userId: string): Promise<Insight[]> {

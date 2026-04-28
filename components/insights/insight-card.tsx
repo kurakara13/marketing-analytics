@@ -29,6 +29,7 @@ import {
   type InsightFeedbackMap,
 } from "@/lib/insight-feedback";
 import { FeedbackButtons } from "./feedback-buttons";
+import { ShareButton } from "./share-button";
 
 const SEVERITY_STYLES: Record<
   InsightObservation["severity"],
@@ -78,6 +79,7 @@ export function InsightCard({
   insight,
   previousInsightId,
   feedback,
+  showShare = true,
 }: {
   insight: Insight;
   /** When set, renders a "Bandingkan" button that links to the
@@ -91,6 +93,9 @@ export function InsightCard({
    *  in neutral state — useful for read-only contexts (e.g. compare
    *  page) where we don't want feedback widgets. */
   feedback?: InsightFeedbackMap;
+  /** Hide the share button — used by the public share page itself
+   *  (recipients can't share further) and any other read-only context. */
+  showShare?: boolean;
 }) {
   const ago = formatDistanceToNow(insight.createdAt, {
     addSuffix: true,
@@ -110,18 +115,25 @@ export function InsightCard({
               Dibuat {ago} · {insight.windowDays} hari · {insight.modelUsed}
             </CardDescription>
           </div>
-          {previousInsightId ? (
-            <Link
-              href={`/insights/compare?a=${insight.id}&b=${previousInsightId}`}
-              className={cn(
-                buttonVariants({ variant: "outline", size: "sm" }),
-                "shrink-0",
-              )}
-            >
-              <ArrowLeftRight className="size-3.5" />
-              Bandingkan
-            </Link>
-          ) : null}
+          <div className="flex shrink-0 items-center gap-1.5">
+            {showShare ? (
+              <ShareButton
+                insightId={insight.id}
+                initialToken={insight.shareToken}
+              />
+            ) : null}
+            {previousInsightId ? (
+              <Link
+                href={`/insights/compare?a=${insight.id}&b=${previousInsightId}`}
+                className={cn(
+                  buttonVariants({ variant: "outline", size: "sm" }),
+                )}
+              >
+                <ArrowLeftRight className="size-3.5" />
+                Bandingkan
+              </Link>
+            ) : null}
+          </div>
         </div>
       </CardHeader>
 
