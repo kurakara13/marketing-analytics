@@ -35,6 +35,7 @@ import {
   WIDGET_PALETTE_ITEMS,
   type WidgetCategory,
 } from "./widget-defaults";
+import { SlideSettings } from "./slide-settings";
 import { WidgetConfigForm } from "./widget-forms";
 
 type ZOrderAction = "forward" | "backward" | "front" | "back";
@@ -46,6 +47,7 @@ type Props = {
   onUpdateWidget: (id: string, updater: (w: Widget) => Widget) => void;
   onDeleteWidget: (id: string) => void;
   onMoveWidget: (id: string, action: ZOrderAction) => void;
+  onUpdateSlide: (id: string, patch: Partial<Slide>) => void;
   onClearSelection: () => void;
 };
 
@@ -77,6 +79,7 @@ export function WidgetSidePanel({
   onUpdateWidget,
   onDeleteWidget,
   onMoveWidget,
+  onUpdateSlide,
   onClearSelection,
 }: Props) {
   // No slide selected — empty state
@@ -128,7 +131,16 @@ export function WidgetSidePanel({
             transition={FADE}
             className="flex min-h-0 flex-1 flex-col overflow-hidden"
           >
-            <WidgetPalette onAdd={onAddWidget} />
+            {/* Single scroll container for slide settings + widget
+                palette — avoids nested scroll bars. SlideSettings
+                sits on top, palette flows underneath. */}
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+              <SlideSettings
+                slide={slide}
+                onUpdate={(patch) => onUpdateSlide(slide.id, patch)}
+              />
+              <WidgetPalette onAdd={onAddWidget} />
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -187,7 +199,7 @@ function WidgetPalette({ onAdd }: { onAdd: (widget: Widget) => void }) {
   return (
     <>
       <PanelHeader title="Add widget" hint="Klik untuk tambah ke slide aktif." />
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-3">
+      <div className="flex flex-col gap-4 p-3">
         {grouped.map(({ category, items }, gi) => (
           <motion.section
             key={category}

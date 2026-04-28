@@ -95,9 +95,17 @@ export function SlideCanvas({
           width: canvasW,
           height: canvasH,
           backgroundColor: `#${slide.background}`,
-          backgroundImage:
-            "linear-gradient(rgba(15,23,42,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(15,23,42,0.04) 1px, transparent 1px)",
-          backgroundSize: `${pxPerInch}px ${pxPerInch}px`,
+          // Slide background image overrides the grid; we drop the
+          // grid pattern when an image is set so the canvas matches
+          // the rendered PPT.
+          backgroundImage: slide.backgroundImage
+            ? `url(/api/uploads/${slide.backgroundImage})`
+            : "linear-gradient(rgba(15,23,42,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(15,23,42,0.04) 1px, transparent 1px)",
+          backgroundSize: slide.backgroundImage
+            ? "cover"
+            : `${pxPerInch}px ${pxPerInch}px`,
+          backgroundPosition: slide.backgroundImage ? "center" : undefined,
+          backgroundRepeat: slide.backgroundImage ? "no-repeat" : undefined,
         }}
         onClick={(e) => {
           // Clicking empty canvas = deselect.

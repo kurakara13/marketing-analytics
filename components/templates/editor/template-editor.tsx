@@ -90,6 +90,7 @@ export function TemplateEditor({
           id: newId,
           name: `Slide ${d.slides.length + 1}`,
           background: "F8FAFC",
+          backgroundImage: null,
           widgets: [],
         },
       ],
@@ -123,6 +124,20 @@ export function TemplateEditor({
         ...d,
         slides: d.slides.map((s) =>
           s.id === slideId ? { ...s, name: newName } : s,
+        ),
+      }));
+    },
+    [updateDefinition],
+  );
+
+  // Patch arbitrary slide fields (background, backgroundImage, etc.)
+  // without affecting widgets. Used by the slide-settings panel.
+  const handleUpdateSlide = useCallback(
+    (slideId: string, patch: Partial<TemplateDefinition["slides"][number]>) => {
+      updateDefinition((d) => ({
+        ...d,
+        slides: d.slides.map((s) =>
+          s.id === slideId ? { ...s, ...patch } : s,
         ),
       }));
     },
@@ -435,6 +450,7 @@ export function TemplateEditor({
           onUpdateWidget={handleUpdateWidget}
           onDeleteWidget={handleDeleteWidget}
           onMoveWidget={handleMoveWidget}
+          onUpdateSlide={handleUpdateSlide}
           onClearSelection={() => setSelectedWidgetId(null)}
         />
       </div>

@@ -6,6 +6,7 @@ import type { ReportData } from "@/lib/reports/fetch-report-data";
 // renderer the registry is fully populated.
 import { getWidgetDefinition } from "@/lib/reports/widgets";
 import type { RenderContext } from "@/lib/reports/widgets/render-context";
+import { readStoredImage } from "@/lib/storage";
 
 import type { TemplateDefinition } from "./types";
 
@@ -39,7 +40,24 @@ export async function renderTemplate(args: {
 
   for (const slideDef of args.template.definition.slides) {
     const slide = pres.addSlide();
+
+    // Background — image overrides flat color. We always set the
+    // color first as a fallback in case the image fails to load
+    // (deleted file, broken path).
     slide.background = { color: slideDef.background };
+    if (slideDef.backgroundImage) {
+      const file = await readStoredImage(slideDef.backgroundImage);
+      if (file) {
+        const base64 = file.buffer.toString("base64");
+        slide.background = {
+          data: `data:${file.contentType};base64,${base64}`,
+        };
+      } else {
+        console.warn(
+          `[renderTemplate] Slide ${slideDef.id} backgroundImage missing: ${slideDef.backgroundImage}`,
+        );
+      }
+    }
 
     for (const widget of slideDef.widgets) {
       const def = getWidgetDefinition(widget.type);

@@ -300,8 +300,13 @@ export type WidgetType = Widget["type"];
 export const slideSchema = z.object({
   id: z.string(),
   name: z.string().default("Untitled slide"),
-  /** Hex without leading #. */
+  /** Hex without leading #. Used as flat background color or as the
+   *  base color underneath a background image. */
   background: z.string().regex(/^[0-9A-Fa-f]{6}$/).default("F8FAFC"),
+  /** Optional uploaded image used as the slide's background fill.
+   *  When set, overrides the flat color. Path relative to the
+   *  uploads root (same shape as image widget config). */
+  backgroundImage: z.string().nullable().default(null),
   widgets: z.array(widgetSchema).default([]),
 });
 export type Slide = z.infer<typeof slideSchema>;
@@ -353,6 +358,7 @@ export function createBlankTemplateDefinition(): TemplateDefinition {
         id: crypto.randomUUID(),
         name: "Slide 1",
         background: "F8FAFC",
+        backgroundImage: null,
         widgets: [],
       },
     ],
