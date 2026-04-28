@@ -10,6 +10,10 @@ import {
   getUserFeedbackSummary,
   type FeedbackSummary,
 } from "@/lib/insight-feedback";
+import {
+  detectAttributionFlags,
+  type AttributionFlag,
+} from "./attribution-flags";
 import { INSIGHTS_SYSTEM_PROMPT } from "./prompts";
 
 // Provider: OpenAI. We picked GPT-5 over Claude / Gemini for the
@@ -129,6 +133,29 @@ function fmtDelta(current: number, previous: number): string {
 // Sections are conditional — we only include data the user has
 // connected. Skipped sections are tagged "(belum tersedia)" so the
 // model doesn't hallucinate numbers for missing sources.
+function buildAttributionFlagsBlock(flags: AttributionFlag[]): string {
+  if (flags.length === 0) return "";
+
+  const lines = flags.map(
+    (f) => `- **[${f.severity.toUpperCase()}] ${f.label}** — ${f.description}`,
+  );
+
+  return `## Data quality / attribution flags (auto-detected)
+${lines.join("\n")}
+
+PENTING: Flag di atas adalah hasil deteksi heuristik dari data yang
+tersedia, BUKAN observation Anda sendiri. Tugas Anda:
+1. Untuk setiap flag, JIKA validasi data Anda sependapat, masukkan
+   sebagai observation di output dengan severity yang sesuai dan tambah
+   konteks/angka yang lebih dalam dari analisis Anda.
+2. Hubungkan flag ini ke recommendations konkret (mis. "tambahkan
+   gtm_debug ke unwanted query parameters di GA4 Admin").
+3. Jangan duplikasi — kalau sudah jadi observation, tidak perlu
+   diulang lagi di section lain.
+
+`;
+}
+
 function buildFeedbackBlock(summary: FeedbackSummary): string {
   if (summary.liked.length === 0 && summary.disliked.length === 0) return "";
 
@@ -187,6 +214,7 @@ function buildUserPrompt(
   reportData: ReportData,
   businessContext: UserBusinessContext | null,
   feedbackSummary: FeedbackSummary,
+  attributionFlags: AttributionFlag[],
 ): string {
   const { totals, previousTotals, trend, campaigns, connectedSources } =
     reportData;
@@ -314,7 +342,7 @@ function buildUserPrompt(
 
   return `Analisis data marketing berikut dan kembalikan insight dalam JSON terstruktur.
 
-${buildBusinessContextBlock(businessContext)}${buildFeedbackBlock(feedbackSummary)}## Periode laporan
+${buildBusinessContextBlock(businessContext)}${buildFeedbackBlock(feedbackSummary)}${buildAttributionFlagsBlock(attributionFlags)}## Periode laporan
 ${reportData.windowLabel} (${reportData.windowStart} → ${reportData.windowEnd})
 Type: ${reportData.period}
 
@@ -367,10 +395,12 @@ export async function generateInsight(args: {
     getBusinessContext(userId),
     getUserFeedbackSummary(userId),
   ]);
+  const attributionFlags = detectAttributionFlags(reportData);
   const userPrompt = buildUserPrompt(
     reportData,
     businessContext,
     feedbackSummary,
+    attributionFlags,
   );
 
   const client = getClient();
