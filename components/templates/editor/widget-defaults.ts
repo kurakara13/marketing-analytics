@@ -111,7 +111,7 @@ export const WIDGET_PALETTE_ITEMS: PaletteItem[] = [
     label: "AI Insight",
     description: "Commentary auto-generate oleh Claude.",
     category: "ai",
-    enabled: false,
+    enabled: true,
   },
 ];
 

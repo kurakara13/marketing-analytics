@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { reportTemplates } from "@/lib/db/schema";
+import { findLatestInsight } from "@/lib/ai/insights";
 import { fetchReportData } from "@/lib/reports/fetch-report-data";
 import { parseTemplateDefinition } from "@/lib/reports/templates/types";
 import { TemplateEditor } from "@/components/templates/editor/template-editor";
@@ -79,6 +80,24 @@ export default async function EditReportPage({
     reportData = null;
   }
 
+  // Best-effort lookup of the latest cached AI insight for this period.
+  // If one exists, the canvas preview can render real AI content into
+  // ai_narrative widgets. Otherwise, those widgets fall back to a
+  // placeholder ("Generate .pptx to populate") and only get filled at
+  // export time.
+  let latestInsight = null;
+  if (reportData) {
+    try {
+      latestInsight = await findLatestInsight({
+        userId: session.user.id,
+        windowStart: reportData.windowStart,
+        windowEnd: reportData.windowEnd,
+      });
+    } catch (err) {
+      console.error("[editor] findLatestInsight failed:", err);
+    }
+  }
+
   return (
     <TemplateEditor
       templateId={template.id}
@@ -86,6 +105,7 @@ export default async function EditReportPage({
       initialDescription={template.description}
       initialDefinition={definition}
       reportData={reportData}
+      latestInsight={latestInsight}
     />
   );
 }

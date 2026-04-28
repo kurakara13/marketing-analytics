@@ -8,6 +8,7 @@ import "./line-chart";
 import "./bar-chart";
 import "./image";
 import "./shape";
+import "./ai-narrative";
 
 // Re-export the lookup API so callers can `import { getWidgetDefinition }
 // from "@/lib/reports/widgets"` and trust that all types are loaded.

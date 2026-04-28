@@ -1,6 +1,6 @@
 "use client";
 
-import { Image as ImageIcon, Table } from "lucide-react";
+import { Image as ImageIcon, Sparkles, Table } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -11,6 +11,7 @@ import {
 
 import type { ReportTotals } from "@/lib/reports/fetch-report-data";
 import type {
+  AiNarrativeWidgetConfig,
   BarChartWidgetConfig,
   KpiCardWidgetConfig,
   LineChartWidgetConfig,
@@ -149,16 +150,7 @@ export function CanvasWidgetPreview({ widget }: { widget: Widget }) {
       );
 
     case "ai_narrative":
-      return (
-        <div className="bg-card flex h-full w-full flex-col gap-1 border p-1.5">
-          <div className="text-[10px] font-bold">
-            {widget.config.title || "AI Insight"}
-          </div>
-          <div className="text-muted-foreground text-[9px]">
-            {widget.config.sections.join(" · ")}
-          </div>
-        </div>
-      );
+      return <AiNarrativePreview config={widget.config} />;
   }
 }
 
@@ -437,6 +429,117 @@ function PlaceholderChartArea({ label }: { label: string }) {
   return (
     <div className="text-muted-foreground/70 flex h-full w-full items-center justify-center text-[10px] italic">
       {label}
+    </div>
+  );
+}
+
+// ─── AI narrative preview ───────────────────────────────────────────────
+//
+// Reads the latest cached insight from EditorContext and renders the
+// configured sections (wins / concerns / anomalies / recommendations).
+// At PPT export time the renderer either reuses this insight or
+// generates a fresh one — the preview here is the closest possible
+// match to what will land in the .pptx without paying the Claude API
+// call on every editor render.
+
+const SECTION_LABELS: Record<string, string> = {
+  wins: "Key Wins",
+  concerns: "Areas to Watch",
+  anomalies: "Anomalies",
+  recommendations: "Recommended Actions",
+};
+const SECTION_COLORS: Record<string, string> = {
+  wins: "text-emerald-600",
+  concerns: "text-amber-600",
+  anomalies: "text-red-600",
+  recommendations: "text-blue-600",
+};
+
+function AiNarrativePreview({ config }: { config: AiNarrativeWidgetConfig }) {
+  const { latestInsight } = useEditorContext();
+
+  // Title bar — always shown if configured.
+  const titleEl = config.title ? (
+    <div className="text-foreground text-[11px] font-semibold leading-tight">
+      {config.title}
+    </div>
+  ) : null;
+
+  if (!latestInsight) {
+    return (
+      <div className="bg-card flex h-full w-full flex-col gap-1.5 overflow-hidden border p-2">
+        {titleEl}
+        <div className="text-muted-foreground/80 flex flex-1 flex-col items-center justify-center gap-1 text-center">
+          <Sparkles className="size-4 opacity-50" />
+          <p className="text-[10px] italic">
+            Belum ada AI insight untuk periode ini.
+          </p>
+          <p className="text-muted-foreground/60 text-[9px]">
+            Konten akan auto-generate saat klik Generate .pptx, atau
+            generate manual via /insights.
+          </p>
+          <p className="text-muted-foreground/60 mt-1 text-[9px]">
+            Sections: {config.sections.join(" · ")}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Section bullets resolved from the cached insight (mirrors the
+  // server-side mapping in lib/reports/widgets/ai-narrative.ts).
+  type Bullet = { title: string; description: string };
+  const sectionBullets: Array<{ key: string; bullets: Bullet[] }> = config.sections.map(
+    (key) => {
+      if (key === "recommendations") {
+        return {
+          key,
+          bullets: (latestInsight.recommendations ?? [])
+            .slice(0, 3)
+            .map((r) => ({ title: r.title, description: r.description })),
+        };
+      }
+      const severity =
+        key === "wins" ? "info" : key === "concerns" ? "warning" : "alert";
+      return {
+        key,
+        bullets: (latestInsight.observations ?? [])
+          .filter((o) => o.severity === severity)
+          .slice(0, 3)
+          .map((o) => ({ title: o.title, description: o.description })),
+      };
+    },
+  );
+
+  return (
+    <div className="bg-card flex h-full w-full flex-col gap-2 overflow-hidden border p-2">
+      {titleEl}
+      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
+        {sectionBullets.map((s) =>
+          s.bullets.length > 0 ? (
+            <div key={s.key} className="flex flex-col gap-0.5">
+              <div
+                className={`text-[10px] font-semibold ${SECTION_COLORS[s.key]}`}
+              >
+                {SECTION_LABELS[s.key]}
+              </div>
+              <ul className="space-y-0.5">
+                {s.bullets.map((b, i) => (
+                  <li
+                    key={i}
+                    className="text-foreground text-[9px] leading-snug"
+                  >
+                    <span className="font-medium">{b.title}:</span>{" "}
+                    <span className="text-muted-foreground">
+                      {b.description}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null,
+        )}
+      </div>
     </div>
   );
 }

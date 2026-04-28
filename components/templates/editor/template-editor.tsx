@@ -19,6 +19,7 @@ import {
   type TemplateDefinition,
   type Widget,
 } from "@/lib/reports/templates/types";
+import type { Insight } from "@/lib/db/schema";
 import type { ReportData } from "@/lib/reports/fetch-report-data";
 import { cn } from "@/lib/utils";
 import { EditorProvider } from "./editor-context";
@@ -33,6 +34,7 @@ type Props = {
   initialDescription: string | null;
   initialDefinition: TemplateDefinition;
   reportData: ReportData | null;
+  latestInsight: Insight | null;
 };
 
 const AUTOSAVE_DEBOUNCE_MS = 1500;
@@ -43,6 +45,7 @@ export function TemplateEditor({
   initialDescription,
   initialDefinition,
   reportData,
+  latestInsight,
 }: Props) {
   const [name, setName] = useState(initialName);
   const [description, setDescription] = useState(initialDescription ?? "");
@@ -359,7 +362,11 @@ export function TemplateEditor({
   }, [selectedWidgetId, handleDeleteWidget, handleMoveWidget]);
 
   return (
-    <EditorProvider templateId={templateId} reportData={reportData}>
+    <EditorProvider
+      templateId={templateId}
+      reportData={reportData}
+      latestInsight={latestInsight}
+    >
     <div className="flex h-full min-h-0 flex-1 flex-col gap-4">
       {/* Toolbar */}
       <header className="flex items-center gap-3 px-1">
