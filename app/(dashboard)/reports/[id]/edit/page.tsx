@@ -7,7 +7,7 @@ import { reportTemplates } from "@/lib/db/schema";
 import { parseTemplateDefinition } from "@/lib/reports/templates/types";
 import { TemplateEditor } from "@/components/templates/editor/template-editor";
 
-export default async function EditTemplatePage({
+export default async function EditReportPage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -40,10 +40,10 @@ export default async function EditTemplatePage({
     return (
       <div className="flex flex-col gap-4">
         <h1 className="text-2xl font-semibold tracking-tight">
-          Template tidak bisa dibuka
+          Report tidak bisa dibuka
         </h1>
         <p className="text-muted-foreground text-sm">
-          Definisi template ini tidak match schema saat ini. Mungkin dibuat di
+          Definisi report ini tidak match schema saat ini. Mungkin dibuat di
           versi lama yang belum di-migrate.
         </p>
         <pre className="bg-muted rounded p-3 text-xs">

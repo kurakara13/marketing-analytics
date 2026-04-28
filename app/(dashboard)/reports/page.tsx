@@ -1,10 +1,14 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Calendar, Download, FileText, LayoutTemplate } from "lucide-react";
+import { redirect } from "next/navigation";
+import { desc, eq } from "drizzle-orm";
+import { Plus, FileText } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { id as idLocale } from "date-fns/locale";
 
 import { auth } from "@/lib/auth";
-import { listConnectionsForUser } from "@/lib/connections";
-import { buttonVariants } from "@/components/ui/button";
+import { db } from "@/lib/db";
+import { reportTemplates } from "@/lib/db/schema";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -13,18 +17,24 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { createTemplateAction } from "./actions";
+import { TemplateRowActions } from "@/components/templates/template-row-actions";
 
 export default async function ReportsPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const allConnections = await listConnectionsForUser(session.user.id);
-  const realConnections = allConnections.filter(
-    (c) => !c.externalAccountId.startsWith("_pending_"),
-  );
-  const sources = Array.from(
-    new Set(realConnections.map((c) => c.connectorId)),
-  );
+  const reports = await db
+    .select({
+      id: reportTemplates.id,
+      name: reportTemplates.name,
+      description: reportTemplates.description,
+      updatedAt: reportTemplates.updatedAt,
+      definition: reportTemplates.definition,
+    })
+    .from(reportTemplates)
+    .where(eq(reportTemplates.userId, session.user.id))
+    .orderBy(desc(reportTemplates.updatedAt));
 
   return (
     <div className="flex flex-col gap-6">
@@ -32,177 +42,92 @@ export default async function ReportsPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
           <p className="text-muted-foreground text-sm">
-            Auto-generated PowerPoint reports dari data semua data source
-            terkoneksi. Download .pptx, edit narrative section di PowerPoint,
-            presentasikan.
+            Susun layout report Anda — drag widget di canvas, pilih data
+            source, generate jadi .pptx kapan saja.
           </p>
         </div>
-        <Link
-          href="/reports/templates"
-          className={cn(buttonVariants({ variant: "default" }))}
-        >
-          <LayoutTemplate className="size-4" />
-          Custom Templates
-        </Link>
+        <form action={createTemplateAction}>
+          <input type="hidden" name="name" value="Untitled report" />
+          <Button type="submit">
+            <Plus className="size-4" />
+            New blank report
+          </Button>
+        </form>
       </div>
 
-      {realConnections.length === 0 ? (
+      {reports.length === 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>Belum ada data source aktif</CardTitle>
+            <CardTitle>Belum ada report</CardTitle>
             <CardDescription>
-              Connect minimal satu data source di /data-sources sebelum generate
-              report.
+              Klik &quot;New blank report&quot; untuk mulai. Builder akan
+              terbuka dengan 1 slide kosong — tambah widget (text, KPI card,
+              line chart) lalu konfigurasi data source.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <Link
-              href="/data-sources"
-              className={cn(buttonVariants({ variant: "default" }))}
-            >
-              Buka Data Sources
-            </Link>
-          </CardContent>
         </Card>
-      ) : null}
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <ReportCard
-          title="Weekly Report"
-          icon={Calendar}
-          description="ISO week yang baru selesai (Senin–Minggu) vs minggu sebelumnya, dengan trend 6 minggu. 8 slide PPT — cover, executive summary, website performance, Google Ads, organic, narrative, action items, closing."
-          href="/api/reports/weekly/export"
-          filename="marketing-analytics-weekly-{date}.pptx"
-          enabled={realConnections.length > 0}
-        />
-        <ReportCard
-          title="Monthly Report"
-          icon={FileText}
-          description="Bulan kalender lengkap yang baru selesai vs bulan sebelumnya, dengan trend 6 bulan. Sama 8 slide tapi window lebih panjang — cocok untuk monthly review."
-          href="/api/reports/monthly/export"
-          filename="marketing-analytics-monthly-{date}.pptx"
-          enabled={realConnections.length > 0}
-        />
-      </div>
-
-      {realConnections.length > 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Data sources terkoneksi</CardTitle>
-            <CardDescription>
-              Report-nya akan otomatis pakai data dari source-source ini.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-1 text-sm">
-              {sources.map((s) => {
-                const count = realConnections.filter(
-                  (c) => c.connectorId === s,
-                ).length;
-                return (
-                  <li key={s} className="flex items-center justify-between">
-                    <span className="font-medium">
-                      {s === "ga4"
-                        ? "Google Analytics 4"
-                        : s === "google_ads"
-                          ? "Google Ads"
-                          : s === "search_console"
-                            ? "Google Search Console"
-                            : s}
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {reports.map((r) => {
+            const def = r.definition as { slides?: unknown[] } | null;
+            const slideCount = Array.isArray(def?.slides)
+              ? def.slides.length
+              : 0;
+            return (
+              <Card key={r.id} className="flex flex-col">
+                <CardHeader>
+                  <div className="flex items-start gap-3">
+                    <div className="bg-primary/10 text-primary flex size-9 shrink-0 items-center justify-center rounded-md">
+                      <FileText className="size-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <CardTitle className="truncate text-base leading-tight">
+                        {r.name}
+                      </CardTitle>
+                      <CardDescription className="mt-0.5 line-clamp-2">
+                        {r.description ?? "Tanpa deskripsi"}
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="text-muted-foreground mt-auto flex flex-col gap-2 text-xs">
+                  <div className="flex justify-between">
+                    <span>{slideCount} slide</span>
+                    <span>
+                      Diupdate{" "}
+                      {formatDistanceToNow(r.updatedAt, {
+                        addSuffix: true,
+                        locale: idLocale,
+                      })}
                     </span>
-                    <span className="text-muted-foreground">
-                      {count} {count === 1 ? "akun" : "akun"}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Yang di-auto-fill vs manual</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm">
-          <div>
-            <strong className="text-emerald-700 dark:text-emerald-400">
-              Auto-filled
-            </strong>{" "}
-            — Cover (date + week number), KPI cards (sessions, conversions,
-            spend, CPL), trend charts (6 minggu / 6 bulan), Google Ads campaign
-            table, Organic &amp; SEO (clicks, impressions, CTR, posisi rata-rata).
-          </div>
-          <div>
-            <strong className="text-amber-700 dark:text-amber-400">
-              Editable di PowerPoint
-            </strong>{" "}
-            — Key Wins, Areas of Improvement, Action Items. Slide-slide ini ship
-            dengan placeholder bullets — Anda edit di PowerPoint setelah
-            download untuk menambah konteks &amp; narrative.
-          </div>
-          <div>
-            <strong className="text-muted-foreground">Coming soon</strong> —
-            Meta / TikTok / Instagram connector saat tersedia akan otomatis
-            nambah ke executive summary.
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function ReportCard({
-  title,
-  icon: Icon,
-  description,
-  href,
-  filename,
-  enabled,
-}: {
-  title: string;
-  icon: typeof Calendar;
-  description: string;
-  href: string;
-  filename: string;
-  enabled: boolean;
-}) {
-  return (
-    <Card className="flex flex-col">
-      <CardHeader>
-        <div className="flex items-start gap-3">
-          <div className="bg-primary/10 text-primary flex size-10 shrink-0 items-center justify-center rounded-md">
-            <Icon className="size-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <CardTitle>{title}</CardTitle>
-            <CardDescription className="mt-1">{description}</CardDescription>
-          </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Link
+                      href={`/reports/${r.id}/edit`}
+                      className={cn(
+                        buttonVariants({ variant: "default", size: "sm" }),
+                        "flex-1",
+                      )}
+                    >
+                      Edit
+                    </Link>
+                    <a
+                      href={`/api/reports/${r.id}/generate`}
+                      download
+                      className={cn(
+                        buttonVariants({ variant: "outline", size: "sm" }),
+                      )}
+                    >
+                      Generate
+                    </a>
+                    <TemplateRowActions templateId={r.id} name={r.name} />
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
-      </CardHeader>
-      <CardContent className="text-muted-foreground mt-auto flex flex-col gap-2 text-xs">
-        <div className="font-mono">{filename}</div>
-        {enabled ? (
-          <a
-            href={href}
-            download
-            className={cn(buttonVariants({ variant: "default" }), "w-full")}
-          >
-            <Download className="size-4" />
-            Download .pptx
-          </a>
-        ) : (
-          <span
-            className={cn(
-              buttonVariants({ variant: "outline" }),
-              "w-full opacity-50",
-            )}
-          >
-            Connect data source dulu
-          </span>
-        )}
-      </CardContent>
-    </Card>
+      )}
+    </div>
   );
 }

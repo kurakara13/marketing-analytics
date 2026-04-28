@@ -7,7 +7,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { saveTemplateAction } from "@/app/(dashboard)/reports/templates/actions";
+import { saveTemplateAction } from "@/app/(dashboard)/reports/actions";
 import {
   createBlankTemplateDefinition,
   type TemplateDefinition,
@@ -186,7 +186,7 @@ export function TemplateEditor({
       toast.warning("Save dulu sebelum generate.");
       return;
     }
-    window.location.href = `/api/reports/templates/${templateId}/generate`;
+    window.location.href = `/api/reports/${templateId}/generate`;
   }, [isDirty, templateId]);
 
   return (
@@ -194,11 +194,11 @@ export function TemplateEditor({
       {/* Header / toolbar */}
       <div className="flex flex-wrap items-center gap-3 border-b pb-3">
         <Link
-          href="/reports/templates"
+          href="/reports"
           className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-sm"
         >
           <ArrowLeft className="size-4" />
-          Templates
+          Reports
         </Link>
         <Input
           value={name}
@@ -206,7 +206,7 @@ export function TemplateEditor({
             setName(e.target.value);
             setIsDirty(true);
           }}
-          placeholder="Nama template"
+          placeholder="Nama report"
           className="max-w-xs"
         />
         <Input

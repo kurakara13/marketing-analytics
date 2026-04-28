@@ -10,7 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { deleteTemplateAction } from "@/app/(dashboard)/reports/templates/actions";
+import { deleteTemplateAction } from "@/app/(dashboard)/reports/actions";
 
 type Props = {
   templateId: string;
@@ -22,7 +22,7 @@ export function TemplateRowActions({ templateId, name }: Props) {
 
   function handleDelete() {
     const ok = window.confirm(
-      `Hapus template "${name}"? Tindakan ini tidak bisa dibatalkan.`,
+      `Hapus report "${name}"? Tindakan ini tidak bisa dibatalkan.`,
     );
     if (!ok) return;
 
@@ -32,7 +32,7 @@ export function TemplateRowActions({ templateId, name }: Props) {
         toast.error(result.error);
         return;
       }
-      toast.success(`Template "${name}" dihapus.`);
+      toast.success(`Report "${name}" dihapus.`);
     });
   }
 

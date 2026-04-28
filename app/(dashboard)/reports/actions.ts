@@ -21,7 +21,7 @@ export async function createTemplateAction(formData: FormData): Promise<void> {
     throw new Error("Tidak ada session aktif");
   }
 
-  const name = String(formData.get("name") ?? "").trim() || "Untitled template";
+  const name = String(formData.get("name") ?? "").trim() || "Untitled report";
   const description = String(formData.get("description") ?? "").trim() || null;
 
   const [created] = await db
@@ -35,8 +35,8 @@ export async function createTemplateAction(formData: FormData): Promise<void> {
     })
     .returning({ id: reportTemplates.id });
 
-  revalidatePath("/reports/templates");
-  redirect(`/reports/templates/${created.id}/edit`);
+  revalidatePath("/reports");
+  redirect(`/reports/${created.id}/edit`);
 }
 
 // ─── Save template definition (full overwrite) ──────────────────────────
@@ -70,8 +70,8 @@ export async function saveTemplateAction(
     return {
       error:
         err instanceof Error
-          ? `Definisi template tidak valid: ${err.message.slice(0, 200)}`
-          : "Definisi template tidak valid",
+          ? `Definisi report tidak valid: ${err.message.slice(0, 200)}`
+          : "Definisi report tidak valid",
     };
   }
 
@@ -92,11 +92,11 @@ export async function saveTemplateAction(
     .returning({ id: reportTemplates.id });
 
   if (result.length === 0) {
-    return { error: "Template tidak ditemukan" };
+    return { error: "Report tidak ditemukan" };
   }
 
-  revalidatePath("/reports/templates");
-  revalidatePath(`/reports/templates/${parsed.data.templateId}/edit`);
+  revalidatePath("/reports");
+  revalidatePath(`/reports/${parsed.data.templateId}/edit`);
   return { success: true };
 }
 
@@ -122,6 +122,6 @@ export async function deleteTemplateAction(
       ),
     );
 
-  revalidatePath("/reports/templates");
+  revalidatePath("/reports");
   return { success: true };
 }
