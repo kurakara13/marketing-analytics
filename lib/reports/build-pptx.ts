@@ -291,12 +291,16 @@ function addTrendChart(
   });
 }
 
-// ─── Slide 3: Website (GA4) Performance ─────────────────────────────────
+// ─── Slide 3: Website Performance ───────────────────────────────────────
+// Mirrors the customer's existing weekly meeting deck:
+//   left  → Sessions Bulanan vs Target (4 months, target-vs-actual bars)
+//   right → Top Converting Pages + Traffic Baru (AI Search) cards
+//   foot  → projection note for the partial current month
 function addWebsiteSlide(pres: PptxGenJS, data: ReportData): void {
   const slide = pres.addSlide();
   slide.background = { color: COLORS.bgLight };
 
-  slide.addText("Website Performance (GA4)", {
+  slide.addText("Website Performance", {
     x: 0.5,
     y: 0.3,
     w: 12.3,
@@ -316,63 +320,324 @@ function addWebsiteSlide(pres: PptxGenJS, data: ReportData): void {
     return;
   }
 
-  // KPIs
-  const cardY = 1.2;
-  const cardW = 2.95;
-  const cardH = 1.4;
-  const gap = 0.15;
-  const cardX = (i: number) => 0.5 + i * (cardW + gap);
+  // ─── Left: Sessions Bulanan vs Target ────────────────────────────────
+  const leftX = 0.5;
+  const leftY = 1.1;
+  const leftW = 7.8;
+  const leftH = 5.8;
 
-  drawKpiCard(slide, {
-    x: cardX(0),
-    y: cardY,
-    w: cardW,
-    h: cardH,
-    label: "Sessions",
-    value: numberFmt.format(Math.round(data.totals.sessions)),
-    sub: deltaText(data.totals.sessions, data.previousTotals.sessions),
+  slide.addShape("roundRect", {
+    x: leftX,
+    y: leftY,
+    w: leftW,
+    h: leftH,
+    fill: { color: COLORS.cardBg },
+    line: { color: COLORS.border, width: 0.75 },
+    rectRadius: 0.08,
   });
-  drawKpiCard(slide, {
-    x: cardX(1),
-    y: cardY,
-    w: cardW,
-    h: cardH,
-    label: "Pageviews",
-    value: numberFmt.format(Math.round(data.totals.pageviews)),
-    sub: deltaText(data.totals.pageviews, data.previousTotals.pageviews),
-  });
-  drawKpiCard(slide, {
-    x: cardX(2),
-    y: cardY,
-    w: cardW,
-    h: cardH,
-    label: "Conversions",
-    value: numberFmt.format(Math.round(data.totals.conversions)),
-    sub: deltaText(data.totals.conversions, data.previousTotals.conversions),
-  });
-  const ppvSession =
-    data.totals.sessions > 0 ? data.totals.pageviews / data.totals.sessions : 0;
-  drawKpiCard(slide, {
-    x: cardX(3),
-    y: cardY,
-    w: cardW,
-    h: cardH,
-    label: "Pages / Session",
-    value: ppvSession > 0 ? ppvSession.toFixed(2) : "—",
+  slide.addText("Sessions Bulanan vs Target", {
+    x: leftX + 0.25,
+    y: leftY + 0.15,
+    w: leftW - 0.5,
+    h: 0.4,
+    fontFace: FONT_FACE,
+    fontSize: 14,
+    bold: true,
+    color: COLORS.text,
   });
 
-  if (data.trend.length > 0) {
-    addTrendChart(pres, slide, {
-      x: 0.5,
-      y: 2.85,
-      w: 12.3,
-      h: 4.3,
-      title: "Trend Sessions",
-      data: data.trend,
-      metric: "sessions",
-      color: COLORS.primary,
+  const monthly = data.monthlyTargetVsActual;
+  const hasAnyTarget = monthly.some((m) => m.target !== null);
+  const hasAnyActual = monthly.some((m) => m.actual > 0);
+
+  if (monthly.length === 0 || !hasAnyActual) {
+    slide.addText(
+      "Belum ada data sessions bulanan. Pastikan GA4 sudah backfill minimal 4 bulan terakhir.",
+      {
+        x: leftX + 0.5,
+        y: leftY + 2.2,
+        w: leftW - 1,
+        h: 1,
+        fontFace: FONT_FACE,
+        fontSize: 12,
+        color: COLORS.textMuted,
+        align: "center",
+        italic: true,
+      },
+    );
+  } else {
+    // Label: "Apr*" when partial, plain "Apr" otherwise.
+    const labels = monthly.map((m) => (m.isPartial ? `${m.label}*` : m.label));
+    // Use projected as the displayed actual: for complete months it
+    // equals actual, for partial months it shows "what we'll likely
+    // hit" — matches how the photo's "Apr* 4,183" reads (actual-so-far)
+    // with a footer projection. We keep the bar height = actual and
+    // print the actual on top, then print the projection in the
+    // footer line.
+    const targets = monthly.map((m) => m.target ?? 0);
+    const actuals = monthly.map((m) => Math.round(m.actual));
+
+    const chartData = [
+      { name: "Target", labels, values: targets },
+      { name: "Actual", labels, values: actuals },
+    ];
+
+    slide.addChart(pres.ChartType.bar, chartData, {
+      x: leftX + 0.25,
+      y: leftY + 0.6,
+      w: leftW - 0.5,
+      h: leftH - 1.2,
+      barDir: "col",
+      barGrouping: "clustered",
+      chartColors: ["CBD5E1", COLORS.accent], // slate-300 (target) + emerald (actual)
+      catAxisLabelFontSize: 11,
+      valAxisLabelFontSize: 10,
+      catAxisLabelFontFace: FONT_FACE,
+      valAxisLabelFontFace: FONT_FACE,
+      showLegend: true,
+      legendPos: "b",
+      legendFontSize: 10,
+      legendFontFace: FONT_FACE,
+      showValue: true,
+      dataLabelFontSize: 10,
+      dataLabelFontFace: FONT_FACE,
+      dataLabelFormatCode: "#,##0",
     });
+
+    // Footer projection line for the partial month, if any.
+    const partial = monthly.find((m) => m.isPartial);
+    if (partial) {
+      const note = `*${partial.label} data per ${partial.daysElapsed} hari (dari ${partial.daysInMonth}) — proyeksi full bulan: ~${numberFmt.format(partial.projected)}`;
+      slide.addText(note, {
+        x: leftX + 0.25,
+        y: leftY + leftH - 0.45,
+        w: leftW - 0.5,
+        h: 0.3,
+        fontFace: FONT_FACE,
+        fontSize: 9,
+        italic: true,
+        color: COLORS.textMuted,
+      });
+    } else if (!hasAnyTarget) {
+      slide.addText(
+        "Belum ada target bulanan. Set di /settings supaya bar abu-abu terisi.",
+        {
+          x: leftX + 0.25,
+          y: leftY + leftH - 0.45,
+          w: leftW - 0.5,
+          h: 0.3,
+          fontFace: FONT_FACE,
+          fontSize: 9,
+          italic: true,
+          color: COLORS.textMuted,
+        },
+      );
+    }
   }
+
+  // ─── Right column: two stacked cards ─────────────────────────────────
+  const rightX = leftX + leftW + 0.2;
+  const rightW = 13.333 - rightX - 0.5; // slide width is 13.333"
+  const cardGap = 0.2;
+  const topCardH = 3.3;
+  const bottomCardH = leftH - topCardH - cardGap;
+
+  // ─── Top Converting Pages ────────────────────────────────────────────
+  drawTopPagesCard(slide, {
+    x: rightX,
+    y: leftY,
+    w: rightW,
+    h: topCardH,
+    pages: data.topPages,
+  });
+
+  // ─── Traffic Baru / AI Search ────────────────────────────────────────
+  drawAITrafficCard(slide, {
+    x: rightX,
+    y: leftY + topCardH + cardGap,
+    w: rightW,
+    h: bottomCardH,
+    aiTraffic: data.aiTraffic,
+  });
+}
+
+function drawTopPagesCard(
+  slide: PptxGenJS.Slide,
+  args: {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    pages: ReportData["topPages"];
+  },
+): void {
+  slide.addShape("roundRect", {
+    x: args.x,
+    y: args.y,
+    w: args.w,
+    h: args.h,
+    fill: { color: COLORS.cardBg },
+    line: { color: COLORS.border, width: 0.75 },
+    rectRadius: 0.08,
+  });
+  slide.addText("Top Converting Pages", {
+    x: args.x + 0.2,
+    y: args.y + 0.15,
+    w: args.w - 0.4,
+    h: 0.35,
+    fontFace: FONT_FACE,
+    fontSize: 14,
+    bold: true,
+    color: COLORS.text,
+  });
+
+  if (args.pages.length === 0) {
+    slide.addText("Belum ada conversion event ter-rekord di window ini.", {
+      x: args.x + 0.2,
+      y: args.y + 1.2,
+      w: args.w - 0.4,
+      h: 0.6,
+      fontFace: FONT_FACE,
+      fontSize: 10,
+      italic: true,
+      color: COLORS.textMuted,
+      align: "center",
+    });
+    return;
+  }
+
+  const startY = args.y + 0.65;
+  const lineH = (args.h - 0.85) / Math.max(args.pages.length, 1);
+  for (let i = 0; i < args.pages.length; i++) {
+    const p = args.pages[i];
+    const lineY = startY + i * lineH;
+    slide.addText(truncatePath(p.page), {
+      x: args.x + 0.2,
+      y: lineY,
+      w: args.w - 1.6,
+      h: lineH - 0.05,
+      fontFace: FONT_FACE,
+      fontSize: 10,
+      color: COLORS.text,
+      valign: "middle",
+    });
+    slide.addText(
+      `${numberFmt.format(Math.round(p.conversions))} conversion${p.conversions === 1 ? "" : "s"}`,
+      {
+        x: args.x + args.w - 1.6,
+        y: lineY,
+        w: 1.4,
+        h: lineH - 0.05,
+        fontFace: FONT_FACE,
+        fontSize: 10,
+        color: COLORS.textMuted,
+        align: "right",
+        valign: "middle",
+      },
+    );
+  }
+}
+
+function drawAITrafficCard(
+  slide: PptxGenJS.Slide,
+  args: {
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    aiTraffic: ReportData["aiTraffic"];
+  },
+): void {
+  slide.addShape("roundRect", {
+    x: args.x,
+    y: args.y,
+    w: args.w,
+    h: args.h,
+    fill: { color: COLORS.cardBg },
+    line: { color: COLORS.border, width: 0.75 },
+    rectRadius: 0.08,
+  });
+  slide.addText("Traffic Baru", {
+    x: args.x + 0.2,
+    y: args.y + 0.15,
+    w: args.w - 0.4,
+    h: 0.35,
+    fontFace: FONT_FACE,
+    fontSize: 14,
+    bold: true,
+    color: COLORS.text,
+  });
+
+  if (args.aiTraffic.totalSessions === 0) {
+    slide.addText(
+      "Belum ada traffic dari AI assistant (ChatGPT, Gemini, Perplexity, dll) di window ini.",
+      {
+        x: args.x + 0.2,
+        y: args.y + 1.0,
+        w: args.w - 0.4,
+        h: 0.7,
+        fontFace: FONT_FACE,
+        fontSize: 10,
+        italic: true,
+        color: COLORS.textMuted,
+        align: "center",
+      },
+    );
+    return;
+  }
+
+  slide.addText(
+    `AI Search: ${numberFmt.format(args.aiTraffic.totalSessions)} sessions`,
+    {
+      x: args.x + 0.2,
+      y: args.y + 0.6,
+      w: args.w - 0.4,
+      h: 0.4,
+      fontFace: FONT_FACE,
+      fontSize: 13,
+      bold: true,
+      color: COLORS.text,
+    },
+  );
+
+  const sources = args.aiTraffic.bySource
+    .slice(0, 6)
+    .map((s) => prettyAIHost(s.source))
+    .filter((v, i, a) => a.indexOf(v) === i)
+    .join(", ");
+
+  slide.addText(`(${sources})`, {
+    x: args.x + 0.2,
+    y: args.y + 1.05,
+    w: args.w - 0.4,
+    h: 0.6,
+    fontFace: FONT_FACE,
+    fontSize: 10,
+    color: COLORS.textMuted,
+  });
+}
+
+function truncatePath(path: string): string {
+  if (path.length <= 50) return path;
+  return path.slice(0, 47) + "…";
+}
+
+function prettyAIHost(host: string): string {
+  const map: Record<string, string> = {
+    "chatgpt.com": "ChatGPT",
+    "chat.openai.com": "ChatGPT",
+    "gemini.google.com": "Gemini",
+    "bard.google.com": "Gemini",
+    "perplexity.ai": "Perplexity",
+    "www.perplexity.ai": "Perplexity",
+    "claude.ai": "Claude",
+    "copilot.microsoft.com": "Copilot",
+    "notebooklm.google.com": "NotebookLM",
+    "you.com": "You.com",
+    "phind.com": "Phind",
+    "kagi.com": "Kagi",
+  };
+  return map[host] ?? host;
 }
 
 // ─── Slide 4: Google Ads Performance ────────────────────────────────────

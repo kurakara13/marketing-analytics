@@ -1,7 +1,14 @@
 import { and, eq, gte, inArray, lte } from "drizzle-orm";
 
 import { db } from "@/lib/db";
-import { connections, dailyMetrics } from "@/lib/db/schema";
+import { connections, dailyMetrics, monthlyTargets } from "@/lib/db/schema";
+import { getValidTokens } from "@/lib/google/tokens";
+import {
+  fetchAITraffic,
+  fetchMonthlySessions,
+  fetchTopConvertingPages,
+  type AITrafficSource,
+} from "./ga4-report-queries";
 
 // Per-period aggregations for a report. Reports cover one current period
 // (window) plus the previous period (for delta) plus a 6-period trend.
@@ -45,6 +52,35 @@ export type CampaignBreakdownRow = ReportTotals & {
   campaignName: string | null;
 };
 
+export type MonthlyTargetVsActual = {
+  /** "YYYY-MM" — calendar month. */
+  yearMonth: string;
+  /** Short Indonesian month label (e.g. "Mar"). */
+  label: string;
+  /** Whether this month has not yet finished and `actual` is partial. */
+  isPartial: boolean;
+  /** Days elapsed in the partial month (1-based; equals daysInMonth when complete). */
+  daysElapsed: number;
+  daysInMonth: number;
+  /** User-defined target for the month, or null when not set. */
+  target: number | null;
+  /** Sessions actually recorded so far (from GA4). */
+  actual: number;
+  /** Linear projection of `actual` to a full month. Equals `actual` when complete. */
+  projected: number;
+};
+
+export type TopPageRow = {
+  page: string;
+  conversions: number;
+  sessions: number;
+};
+
+export type AITrafficSummary = {
+  totalSessions: number;
+  bySource: AITrafficSource[];
+};
+
 export type ReportData = {
   period: PeriodKey;
   /** Inclusive YYYY-MM-DD. */
@@ -60,6 +96,13 @@ export type ReportData = {
   campaigns: CampaignBreakdownRow[];
   connectedSources: string[];
   hasData: boolean;
+  /** Last 4 calendar months of sessions vs target, for the Website slide. */
+  monthlyTargetVsActual: MonthlyTargetVsActual[];
+  /** Top landing pages by conversions over the current window. */
+  topPages: TopPageRow[];
+  /** Sessions from AI assistants (ChatGPT, Gemini, Perplexity, …) over the
+   *  current window. Empty when GA4 isn't connected or there's no AI traffic. */
+  aiTraffic: AITrafficSummary;
 };
 
 const ZERO_TOTALS: ReportTotals = {
@@ -384,6 +427,9 @@ export async function fetchReportData(args: {
       campaigns: [],
       connectedSources: [],
       hasData: false,
+      monthlyTargetVsActual: [],
+      topPages: [],
+      aiTraffic: { totalSessions: 0, bySource: [] },
     };
   }
 
@@ -460,6 +506,47 @@ export async function fetchReportData(args: {
     new Set(realConnections.map((c) => c.connectorId)),
   );
 
+  // ─── Website Performance ad-hoc queries ──────────────────────────────
+  // Monthly target-vs-actual (last 4 calendar months ending in the month
+  // that contains windowEnd), top converting pages over the window, and
+  // AI-referrer traffic. All three are GA4 calls; if GA4 isn't connected
+  // we return empty shells.
+  const ga4Connection = realConnections.find((c) => c.connectorId === "ga4");
+  const monthlyTargetVsActual = await buildMonthlyTargetVsActual({
+    userId: args.userId,
+    ga4Connection,
+    windowEnd,
+  });
+  let topPages: TopPageRow[] = [];
+  let aiTraffic: AITrafficSummary = { totalSessions: 0, bySource: [] };
+  if (ga4Connection) {
+    try {
+      const tokens = await getValidTokens(ga4Connection);
+      const [pages, ai] = await Promise.all([
+        fetchTopConvertingPages({
+          accessToken: tokens.accessToken,
+          propertyId: ga4Connection.externalAccountId,
+          startDate: windowStart,
+          endDate: windowEnd,
+          limit: 5,
+        }),
+        fetchAITraffic({
+          accessToken: tokens.accessToken,
+          propertyId: ga4Connection.externalAccountId,
+          startDate: windowStart,
+          endDate: windowEnd,
+        }),
+      ]);
+      topPages = pages;
+      aiTraffic = ai;
+    } catch (err) {
+      // Don't fail the whole report if these enrichment queries error —
+      // they're best-effort. Log and continue with empty shells so the
+      // slide can still render placeholders.
+      console.error("[reports] GA4 enrichment query failed:", err);
+    }
+  }
+
   return {
     period,
     windowStart,
@@ -472,5 +559,108 @@ export async function fetchReportData(args: {
     campaigns,
     connectedSources,
     hasData: rows.some((r) => r.date >= windowStart && r.date <= windowEnd),
+    monthlyTargetVsActual,
+    topPages,
+    aiTraffic,
   };
+}
+
+/** Build the last 4 calendar months ending at `windowEnd`, joining each
+ *  with its user-defined target and a linear projection if the month
+ *  isn't yet complete. Pulls actual sessions from GA4 in one yearMonth-
+ *  dimensioned query (cheap). */
+async function buildMonthlyTargetVsActual(args: {
+  userId: string;
+  ga4Connection: typeof connections.$inferSelect | undefined;
+  windowEnd: string; // YYYY-MM-DD
+}): Promise<MonthlyTargetVsActual[]> {
+  const windowEndDate = new Date(args.windowEnd + "T00:00:00Z");
+  const endYear = windowEndDate.getUTCFullYear();
+  const endMonth = windowEndDate.getUTCMonth(); // 0-based
+
+  // Build the 4-month window descriptors first, oldest → newest.
+  const months: Array<{
+    yearMonth: string;
+    label: string;
+    startDate: string;
+    endDate: string;
+    daysInMonth: number;
+    daysElapsed: number;
+    isPartial: boolean;
+  }> = [];
+  for (let i = 3; i >= 0; i--) {
+    const start = new Date(Date.UTC(endYear, endMonth - i, 1));
+    const end = new Date(
+      Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 0),
+    );
+    const daysInMonth = end.getUTCDate();
+    // The month is partial when the provided windowEnd lands inside it.
+    const isCurrentBucket =
+      windowEndDate >= start && windowEndDate <= end;
+    const daysElapsed = isCurrentBucket ? windowEndDate.getUTCDate() : daysInMonth;
+    const isPartial = daysElapsed < daysInMonth;
+
+    months.push({
+      yearMonth: `${start.getUTCFullYear()}-${String(start.getUTCMonth() + 1).padStart(2, "0")}`,
+      label: MONTH_LABELS_ID[start.getUTCMonth()],
+      startDate: isoDate(start),
+      endDate: isoDate(end),
+      daysInMonth,
+      daysElapsed,
+      isPartial,
+    });
+  }
+
+  // Targets for the user, restricted to the 4 (year, month) we care
+  // about. We just fetch all the user's targets — the table is tiny.
+  const targetRows = await db
+    .select({
+      year: monthlyTargets.year,
+      month: monthlyTargets.month,
+      metric: monthlyTargets.metric,
+      value: monthlyTargets.value,
+    })
+    .from(monthlyTargets)
+    .where(eq(monthlyTargets.userId, args.userId));
+  const targetByMonth = new Map<string, number>();
+  for (const t of targetRows) {
+    if (t.metric !== "sessions") continue;
+    const ym = `${t.year}-${String(t.month).padStart(2, "0")}`;
+    targetByMonth.set(ym, t.value);
+  }
+
+  // Actuals come from GA4 — one report covering all 4 months. Skip if
+  // GA4 isn't connected.
+  let actualByMonth = new Map<string, number>();
+  if (args.ga4Connection) {
+    try {
+      const tokens = await getValidTokens(args.ga4Connection);
+      const rows = await fetchMonthlySessions({
+        accessToken: tokens.accessToken,
+        propertyId: args.ga4Connection.externalAccountId,
+        startDate: months[0].startDate,
+        endDate: months[months.length - 1].endDate,
+      });
+      actualByMonth = new Map(rows.map((r) => [r.yearMonth, r.sessions]));
+    } catch (err) {
+      console.error("[reports] monthly sessions fetch failed:", err);
+    }
+  }
+
+  return months.map((m) => {
+    const actual = actualByMonth.get(m.yearMonth) ?? 0;
+    const projected = m.isPartial
+      ? Math.round((actual / Math.max(1, m.daysElapsed)) * m.daysInMonth)
+      : actual;
+    return {
+      yearMonth: m.yearMonth,
+      label: m.label,
+      isPartial: m.isPartial,
+      daysElapsed: m.daysElapsed,
+      daysInMonth: m.daysInMonth,
+      target: targetByMonth.get(m.yearMonth) ?? null,
+      actual,
+      projected,
+    };
+  });
 }

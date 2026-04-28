@@ -1,4 +1,9 @@
+import { redirect } from "next/navigation";
+import { eq } from "drizzle-orm";
+
 import { auth } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { monthlyTargets } from "@/lib/db/schema";
 import {
   Card,
   CardContent,
@@ -6,9 +11,21 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { MonthlyTargetsForm } from "@/components/settings/monthly-targets-form";
 
 export default async function SettingsPage() {
   const session = await auth();
+  if (!session?.user?.id) redirect("/login");
+
+  const targets = await db
+    .select({
+      year: monthlyTargets.year,
+      month: monthlyTargets.month,
+      metric: monthlyTargets.metric,
+      value: monthlyTargets.value,
+    })
+    .from(monthlyTargets)
+    .where(eq(monthlyTargets.userId, session.user.id));
 
   return (
     <div className="flex flex-col gap-4">
@@ -33,6 +50,20 @@ export default async function SettingsPage() {
             <span className="text-muted-foreground">Email</span>
             <span>{session?.user?.email ?? "—"}</span>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Monthly Sessions Target</CardTitle>
+          <CardDescription>
+            Target sessions per bulan, dipakai oleh slide Website Performance
+            di report (chart Sessions vs Target). Set untuk minimal 4 bulan
+            terakhir agar chart full.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <MonthlyTargetsForm targets={targets} />
         </CardContent>
       </Card>
     </div>
