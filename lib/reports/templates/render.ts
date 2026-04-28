@@ -1,7 +1,10 @@
 import PptxGenJS from "pptxgenjs";
 
 import type { ReportData } from "@/lib/reports/fetch-report-data";
-import { getWidgetDefinition } from "@/lib/reports/widgets/registry";
+// Import from the widgets barrel — that file performs the side-effect
+// registrations of every widget type, so by the time we reach the
+// renderer the registry is fully populated.
+import { getWidgetDefinition } from "@/lib/reports/widgets";
 import type { RenderContext } from "@/lib/reports/widgets/render-context";
 
 import type { TemplateDefinition } from "./types";

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Calendar, Download, FileText } from "lucide-react";
+import { Calendar, Download, FileText, LayoutTemplate } from "lucide-react";
 
 import { auth } from "@/lib/auth";
 import { listConnectionsForUser } from "@/lib/connections";
@@ -28,13 +28,22 @@ export default async function ReportsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
-        <p className="text-muted-foreground text-sm">
-          Auto-generated PowerPoint reports dari data semua data source
-          terkoneksi. Download .pptx, edit narrative section di PowerPoint,
-          presentasikan.
-        </p>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
+          <p className="text-muted-foreground text-sm">
+            Auto-generated PowerPoint reports dari data semua data source
+            terkoneksi. Download .pptx, edit narrative section di PowerPoint,
+            presentasikan.
+          </p>
+        </div>
+        <Link
+          href="/reports/templates"
+          className={cn(buttonVariants({ variant: "default" }))}
+        >
+          <LayoutTemplate className="size-4" />
+          Custom Templates
+        </Link>
       </div>
 
       {realConnections.length === 0 ? (

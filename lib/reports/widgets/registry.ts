@@ -78,9 +78,10 @@ export function getRegisteredWidgetTypes(): WidgetType[] {
   return Array.from(registry.keys());
 }
 
-// ─── Side-effect registrations ──────────────────────────────────────────
-// Importing these files registers their definitions. Every widget type
-// that can render must be listed here.
-import "./text";
-import "./kpi-card";
-import "./line-chart";
+// Note: widget-type registrations live in `lib/reports/widgets/index.ts`.
+// Doing the side-effect imports here would create a circular import
+// (each widget file imports `registerWidget` from this module) and trip
+// a temporal-dead-zone error on the `registry` const at production
+// build time. Importing the registrations from a sibling file keeps the
+// init order linear: first `registry` is fully initialized, then
+// widgets import + register against it.
