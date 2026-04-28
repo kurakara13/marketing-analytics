@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
+import { Maximize2, Minus, Plus } from "lucide-react";
 import { Rnd } from "react-rnd";
 
 import { cn } from "@/lib/utils";
@@ -24,6 +25,14 @@ const CONTAINER_PADDING = 16;
 const MIN_PX_PER_INCH = 50;
 const MAX_PX_PER_INCH = 180;
 
+// User-controlled zoom multiplier on top of the auto-fit pxPerInch.
+// 1.0 = exactly auto-fit (canvas fills cell). 0.5 = half size, 2.0 =
+// twice size. Bounded so the canvas can never collapse to nothing or
+// grow into the GBs of pixels.
+const ZOOM_MIN = 0.25;
+const ZOOM_MAX = 4;
+const ZOOM_STEP = 1.25; // multiplicative — each click = ×1.25 / ÷1.25
+
 type Props = {
   slide: Slide | null;
   selectedWidgetId: string | null;
@@ -41,9 +50,13 @@ export function SlideCanvas({
   onUpdateWidget,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [pxPerInch, setPxPerInch] = useState(70);
+  // `fitPxPerInch` is the responsive auto-fit value (recomputed on
+  // resize). `zoom` is a user-controlled multiplier on top of that.
+  // Effective scale = fitPxPerInch × zoom.
+  const [fitPxPerInch, setFitPxPerInch] = useState(70);
+  const [zoom, setZoom] = useState(1);
 
-  // Recompute pxPerInch whenever the container resizes. Picks the
+  // Recompute fitPxPerInch whenever the container resizes. Picks the
   // largest scale that fits the canvas (with padding) in both width
   // and height, clamped to MIN/MAX so the canvas doesn't get absurdly
   // small on a side panel or absurdly large on a 4K monitor.
@@ -60,7 +73,7 @@ export function SlideCanvas({
       const byHeight = availableH / SLIDE_H_INCHES;
       const fit = Math.min(byWidth, byHeight);
       const clamped = Math.max(MIN_PX_PER_INCH, Math.min(MAX_PX_PER_INCH, fit));
-      setPxPerInch(Math.round(clamped));
+      setFitPxPerInch(Math.round(clamped));
     }
 
     recompute();
@@ -70,8 +83,69 @@ export function SlideCanvas({
     return () => observer.disconnect();
   }, []);
 
+  const pxPerInch = fitPxPerInch * zoom;
   const canvasW = SLIDE_W_INCHES * pxPerInch;
   const canvasH = SLIDE_H_INCHES * pxPerInch;
+
+  // ─── Zoom controls ────────────────────────────────────────────────────
+  const clampZoom = useCallback(
+    (z: number) => Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z)),
+    [],
+  );
+  const zoomIn = useCallback(() => setZoom((z) => clampZoom(z * ZOOM_STEP)), [
+    clampZoom,
+  ]);
+  const zoomOut = useCallback(
+    () => setZoom((z) => clampZoom(z / ZOOM_STEP)),
+    [clampZoom],
+  );
+  const resetZoom = useCallback(() => setZoom(1), []);
+
+  // Cmd / Ctrl + wheel zoom. Captures the wheel event on the canvas
+  // container (passive: false so we can preventDefault, otherwise the
+  // browser's page-zoom kicks in). Pinch on a trackpad fires the same
+  // ctrlKey-modified wheel event.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    function onWheel(e: WheelEvent) {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+      setZoom((z) => clampZoom(z * factor));
+    }
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [clampZoom]);
+
+  // Cmd/Ctrl + (= / - / 0) keyboard shortcuts. Mounted on window so
+  // the editor's other shortcuts and these don't fight; we only
+  // intercept when the user isn't typing in an input field.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const target = e.target as HTMLElement | null;
+      const typing =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable);
+      if (typing) return;
+
+      if (e.key === "=" || e.key === "+") {
+        e.preventDefault();
+        zoomIn();
+      } else if (e.key === "-") {
+        e.preventDefault();
+        zoomOut();
+      } else if (e.key === "0") {
+        e.preventDefault();
+        resetZoom();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [zoomIn, zoomOut, resetZoom]);
 
   if (!slide) {
     return (
@@ -148,12 +222,59 @@ export function SlideCanvas({
         ) : null}
       </motion.div>
 
-      {/* Scale indicator pinned to the canvas container, doesn't scroll */}
-      <div className="text-muted-foreground/70 pointer-events-none absolute bottom-2 right-3 select-none font-mono text-[10px]">
+      {/* Scale info: bottom-left, doesn't scroll with canvas */}
+      <div className="text-muted-foreground/70 pointer-events-none absolute bottom-2 left-3 select-none font-mono text-[10px]">
         {Math.round(pxPerInch)} px/inch · {Math.round(canvasW)}×
         {Math.round(canvasH)} px
       </div>
+
+      {/* Zoom controls: bottom-right. Always visible regardless of
+          how the user has scrolled the canvas. */}
+      <div className="bg-background/95 absolute bottom-2 right-3 flex items-center overflow-hidden rounded-lg border border-border/60 shadow-sm backdrop-blur-sm">
+        <ZoomBtn onClick={zoomOut} disabled={zoom <= ZOOM_MIN + 0.001}>
+          <Minus className="size-3.5" />
+        </ZoomBtn>
+        <button
+          type="button"
+          onClick={resetZoom}
+          title="Reset zoom (⌘0)"
+          className="hover:bg-muted text-foreground inline-flex h-7 min-w-12 items-center justify-center px-1.5 font-mono text-[11px] tabular-nums transition-colors"
+        >
+          {Math.round(zoom * 100)}%
+        </button>
+        <ZoomBtn onClick={zoomIn} disabled={zoom >= ZOOM_MAX - 0.001}>
+          <Plus className="size-3.5" />
+        </ZoomBtn>
+        <div className="bg-border h-5 w-px" aria-hidden />
+        <ZoomBtn onClick={resetZoom} title="Fit to screen (⌘0)">
+          <Maximize2 className="size-3.5" />
+        </ZoomBtn>
+      </div>
     </div>
+  );
+}
+
+function ZoomBtn({
+  children,
+  onClick,
+  disabled,
+  title,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  title?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex size-7 items-center justify-center transition-colors disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+    >
+      {children}
+    </button>
   );
 }
 
