@@ -1,6 +1,7 @@
 import type { Connector } from "./types";
 import { ga4Connector } from "./ga4";
 import { googleAdsConnector } from "./google-ads";
+import { searchConsoleConnector } from "./search-console";
 
 // Single source of truth for which connectors the app exposes. The Data
 // Sources page reads from here; OAuth route handlers also resolve the
@@ -12,6 +13,7 @@ import { googleAdsConnector } from "./google-ads";
 export const connectors: readonly Connector[] = [
   ga4Connector,
   googleAdsConnector,
+  searchConsoleConnector,
 ];
 
 export function getConnector(id: string): Connector | undefined {

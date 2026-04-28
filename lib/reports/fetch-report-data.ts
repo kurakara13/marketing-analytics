@@ -12,13 +12,21 @@ import { connections, dailyMetrics } from "@/lib/db/schema";
 export type PeriodKey = "weekly" | "monthly";
 
 export type ReportTotals = {
+  // GA4 (engagement / outcomes)
   sessions: number;
   pageviews: number;
   conversions: number;
   revenue: number;
+  // Google Ads (paid)
   impressions: number;
   clicks: number;
   spend: number;
+  // Search Console (organic)
+  organicImpressions: number;
+  organicClicks: number;
+  /** Sum of (position × impressions) per day. Divide by organicImpressions
+   *  to get the impression-weighted average position over the window. */
+  organicPositionWeightedSum: number;
 };
 
 export type TrendPoint = ReportTotals & {
@@ -62,6 +70,9 @@ const ZERO_TOTALS: ReportTotals = {
   impressions: 0,
   clicks: 0,
   spend: 0,
+  organicImpressions: 0,
+  organicClicks: 0,
+  organicPositionWeightedSum: 0,
 };
 
 function isoDate(d: Date): string {
@@ -88,6 +99,9 @@ function addInto(target: ReportTotals, row: ReportTotals): void {
   target.impressions += row.impressions;
   target.clicks += row.clicks;
   target.spend += row.spend;
+  target.organicImpressions += row.organicImpressions;
+  target.organicClicks += row.organicClicks;
+  target.organicPositionWeightedSum += row.organicPositionWeightedSum;
 }
 
 // ISO week number per ISO-8601 (week starts Monday, week 1 contains 4 Jan).
@@ -137,17 +151,47 @@ function formatDateRangeLabel(start: string, end: string): string {
   return `${sDay} ${sMonth} – ${eDay} ${eMonth} ${eYear}`;
 }
 
+// Convert one stored daily_metrics row into a ReportTotals delta, routing
+// fields to the right channel based on `row.source`. This prevents
+// organic clicks (Search Console) from being summed with paid clicks
+// (Google Ads) — they share the same `clicks` column at the storage
+// level but are semantically different in the report.
 function rowToDelta(row: typeof dailyMetrics.$inferSelect): ReportTotals {
   const raw = row.rawData as Record<string, unknown> | null;
-  return {
-    conversions: asNumber(row.conversions),
-    revenue: asNumber(row.revenue),
-    impressions: asNumber(row.impressions),
-    clicks: asNumber(row.clicks),
-    spend: asNumber(row.spend),
-    sessions: raw ? asNumber(raw.sessions) : 0,
-    pageviews: raw ? asNumber(raw.screenPageViews) : 0,
-  };
+  const delta = { ...ZERO_TOTALS };
+
+  switch (row.source) {
+    case "ga4": {
+      delta.conversions = asNumber(row.conversions);
+      delta.revenue = asNumber(row.revenue);
+      delta.sessions = raw ? asNumber(raw.sessions) : 0;
+      delta.pageviews = raw ? asNumber(raw.screenPageViews) : 0;
+      break;
+    }
+    case "google_ads": {
+      delta.impressions = asNumber(row.impressions);
+      delta.clicks = asNumber(row.clicks);
+      delta.spend = asNumber(row.spend);
+      // Ads conversions / revenue stay channel-local; we surface them in
+      // the campaign breakdown table, not in the GA4 conversion KPI.
+      break;
+    }
+    case "search_console": {
+      const impressions = asNumber(row.impressions);
+      delta.organicImpressions = impressions;
+      delta.organicClicks = asNumber(row.clicks);
+      const position = raw ? asNumber(raw.position) : 0;
+      delta.organicPositionWeightedSum = position * impressions;
+      break;
+    }
+    default: {
+      // Unknown source — drop silently. New connectors should be added
+      // here explicitly so we don't accidentally double-count metrics.
+      break;
+    }
+  }
+
+  return delta;
 }
 
 export async function fetchReportData(args: {

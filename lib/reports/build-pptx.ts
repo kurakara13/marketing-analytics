@@ -549,8 +549,8 @@ function addAdsSlide(pres: PptxGenJS, data: ReportData): void {
   }
 }
 
-// ─── Slide 5: Organic & SEO (placeholder) ───────────────────────────────
-function addOrganicSlide(pres: PptxGenJS): void {
+// ─── Slide 5: Organic & SEO (Search Console) ────────────────────────────
+function addOrganicSlide(pres: PptxGenJS, data: ReportData): void {
   const slide = pres.addSlide();
   slide.background = { color: COLORS.bgLight };
 
@@ -565,10 +565,106 @@ function addOrganicSlide(pres: PptxGenJS): void {
     color: COLORS.text,
   });
 
-  drawPlaceholder(
-    slide,
-    "Search Console connector belum tersedia. Connector ini akan menambah Impressions, Clicks, CTR, Avg Position, dan AI Search Visibility ke slide ini.",
-  );
+  const scConnected = data.connectedSources.includes("search_console");
+  if (!scConnected) {
+    drawPlaceholder(
+      slide,
+      "Search Console belum terhubung. Connect di /data-sources untuk auto-fill organic clicks, impressions, CTR, dan posisi rata-rata.",
+    );
+    return;
+  }
+
+  const t = data.totals;
+  const p = data.previousTotals;
+
+  const ctr = t.organicImpressions > 0 ? t.organicClicks / t.organicImpressions : 0;
+  const prevCtr =
+    p.organicImpressions > 0 ? p.organicClicks / p.organicImpressions : 0;
+  const avgPos =
+    t.organicImpressions > 0
+      ? t.organicPositionWeightedSum / t.organicImpressions
+      : 0;
+  const prevAvgPos =
+    p.organicImpressions > 0
+      ? p.organicPositionWeightedSum / p.organicImpressions
+      : 0;
+
+  // 4 KPI cards across the top
+  const cardY = 1.2;
+  const cardH = 1.4;
+  const cardW = 2.95;
+  const gap = 0.15;
+  const cardX = (i: number) => 0.5 + i * (cardW + gap);
+
+  drawKpiCard(slide, {
+    x: cardX(0),
+    y: cardY,
+    w: cardW,
+    h: cardH,
+    label: "Organic Clicks",
+    value: numberFmt.format(Math.round(t.organicClicks)),
+    sub: deltaText(t.organicClicks, p.organicClicks),
+  });
+  drawKpiCard(slide, {
+    x: cardX(1),
+    y: cardY,
+    w: cardW,
+    h: cardH,
+    label: "Organic Impressions",
+    value: numberFmt.format(Math.round(t.organicImpressions)),
+    sub: deltaText(t.organicImpressions, p.organicImpressions),
+  });
+  drawKpiCard(slide, {
+    x: cardX(2),
+    y: cardY,
+    w: cardW,
+    h: cardH,
+    label: "Average CTR",
+    value: ctr > 0 ? `${(ctr * 100).toFixed(2)}%` : "—",
+    sub:
+      ctr > 0 && prevCtr > 0
+        ? deltaText(ctr * 100, prevCtr * 100)
+        : undefined,
+  });
+  drawKpiCard(slide, {
+    x: cardX(3),
+    y: cardY,
+    w: cardW,
+    h: cardH,
+    label: "Average Position",
+    // For position, lower is better — show raw value with 1 decimal.
+    value: avgPos > 0 ? avgPos.toFixed(1) : "—",
+    sub:
+      avgPos > 0 && prevAvgPos > 0
+        ? `${prevAvgPos.toFixed(1)} sebelumnya`
+        : undefined,
+  });
+
+  // Two trend charts side-by-side
+  const periodLabel = data.period === "weekly" ? "6 Minggu" : "6 Bulan";
+
+  if (data.trend.length > 0) {
+    addTrendChart(pres, slide, {
+      x: 0.5,
+      y: 2.85,
+      w: 6.1,
+      h: 4.3,
+      title: `Organic Clicks (${periodLabel})`,
+      data: data.trend,
+      metric: "organicClicks",
+      color: COLORS.accent,
+    });
+    addTrendChart(pres, slide, {
+      x: 6.7,
+      y: 2.85,
+      w: 6.1,
+      h: 4.3,
+      title: `Organic Impressions (${periodLabel})`,
+      data: data.trend,
+      metric: "organicImpressions",
+      color: COLORS.primary,
+    });
+  }
 }
 
 // ─── Slide 6: Key Wins / Areas of Improvement (manual) ──────────────────
@@ -786,7 +882,7 @@ export async function buildReportPptx(data: ReportData): Promise<Buffer> {
   addExecutiveSummary(pres, data);
   addWebsiteSlide(pres, data);
   addAdsSlide(pres, data);
-  addOrganicSlide(pres);
+  addOrganicSlide(pres, data);
   addNarrativeSlide(pres, {
     title: "Key Wins & Areas of Improvement",
     columnA: {

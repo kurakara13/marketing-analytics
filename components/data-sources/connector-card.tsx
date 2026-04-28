@@ -5,6 +5,7 @@ import {
   Clock,
   AlertCircle,
   Megaphone,
+  Search,
   type LucideIcon,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
@@ -33,6 +34,7 @@ type Props = {
 const CONNECTOR_ICONS: Record<string, LucideIcon> = {
   ga4: BarChart3,
   google_ads: Megaphone,
+  search_console: Search,
 };
 
 function isPending(connection: ConnectionWithLastSync): boolean {

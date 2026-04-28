@@ -97,7 +97,9 @@ export default async function ReportsPage() {
                         ? "Google Analytics 4"
                         : s === "google_ads"
                           ? "Google Ads"
-                          : s}
+                          : s === "search_console"
+                            ? "Google Search Console"
+                            : s}
                     </span>
                     <span className="text-muted-foreground">
                       {count} {count === 1 ? "akun" : "akun"}
@@ -121,7 +123,7 @@ export default async function ReportsPage() {
             </strong>{" "}
             — Cover (date + week number), KPI cards (sessions, conversions,
             spend, CPL), trend charts (6 minggu / 6 bulan), Google Ads campaign
-            table.
+            table, Organic &amp; SEO (clicks, impressions, CTR, posisi rata-rata).
           </div>
           <div>
             <strong className="text-amber-700 dark:text-amber-400">
@@ -133,7 +135,6 @@ export default async function ReportsPage() {
           </div>
           <div>
             <strong className="text-muted-foreground">Coming soon</strong> —
-            Search Console connector akan auto-fill slide Organic &amp; SEO.
             Meta / TikTok / Instagram connector saat tersedia akan otomatis
             nambah ke executive summary.
           </div>
