@@ -21,6 +21,9 @@ type EditorContextValue = {
    *  placeholder instead. PPT export always has fresh data — this
    *  is purely for the editor canvas. */
   latestInsight: Insight | null;
+  /** Replace the cached insight (e.g. after a manual regenerate). The
+   *  ai_narrative preview re-renders with the new content immediately. */
+  setLatestInsight: (insight: Insight) => void;
 };
 
 const EditorContext = createContext<EditorContextValue | null>(null);
@@ -29,16 +32,18 @@ export function EditorProvider({
   templateId,
   reportData,
   latestInsight,
+  setLatestInsight,
   children,
 }: {
   templateId: string;
   reportData: ReportData | null;
   latestInsight: Insight | null;
+  setLatestInsight: (insight: Insight) => void;
   children: React.ReactNode;
 }) {
   const value = useMemo(
-    () => ({ templateId, reportData, latestInsight }),
-    [templateId, reportData, latestInsight],
+    () => ({ templateId, reportData, latestInsight, setLatestInsight }),
+    [templateId, reportData, latestInsight, setLatestInsight],
   );
   return (
     <EditorContext.Provider value={value}>{children}</EditorContext.Provider>

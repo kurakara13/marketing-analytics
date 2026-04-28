@@ -109,7 +109,7 @@ export const WIDGET_PALETTE_ITEMS: PaletteItem[] = [
   {
     type: "ai_narrative",
     label: "AI Insight",
-    description: "Commentary auto-generate oleh Claude.",
+    description: "Commentary auto-generate oleh AI (GPT-5).",
     category: "ai",
     enabled: true,
   },

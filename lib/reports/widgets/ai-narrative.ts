@@ -68,7 +68,7 @@ const definition: WidgetDefinition<{
   defaultPosition: { x: 0.5, y: 1, w: 6, h: 5 },
   defaultConfig: aiNarrativeWidgetConfigSchema.parse({}),
   label: "AI Insight",
-  description: "Commentary auto-generate oleh Claude.",
+  description: "Commentary auto-generate oleh AI (GPT-5).",
 
   async render({ slide, widget, context }) {
     const { config, position } = widget;

@@ -7,13 +7,15 @@ import { z } from "zod";
 
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { reportTemplates } from "@/lib/db/schema";
+import { reportTemplates, type Insight } from "@/lib/db/schema";
 import {
   createBlankTemplateDefinition,
   parseTemplateDefinition,
   type TemplateDefinition,
 } from "@/lib/reports/templates/types";
 import { saveImage } from "@/lib/storage";
+import { generateInsight } from "@/lib/ai/insights";
+import { fetchReportData } from "@/lib/reports/fetch-report-data";
 
 // ─── Create blank template ──────────────────────────────────────────────
 export async function createTemplateAction(formData: FormData): Promise<void> {
@@ -187,6 +189,87 @@ export async function uploadImageAction(
   } catch (err) {
     return {
       error: err instanceof Error ? err.message : "Upload gagal",
+    };
+  }
+}
+
+// ─── Regenerate AI insight for a template's current period ──────────────
+//
+// Forces a fresh insight (always creates a new row, even if a cached
+// one exists for the window). Used by the "Regenerate" button on the
+// ai_narrative widget side panel — when the user wants to re-run after
+// editing business context, after a fresh data sync, or just to get a
+// different angle.
+const regenerateInput = z.object({ templateId: z.string().min(1) });
+
+export type RegenerateInsightResult =
+  | { error: string }
+  | { success: true; insight: Insight };
+
+export async function regenerateInsightForReportAction(
+  input: z.infer<typeof regenerateInput>,
+): Promise<RegenerateInsightResult> {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return { error: "Tidak ada session aktif" };
+  }
+
+  const parsed = regenerateInput.safeParse(input);
+  if (!parsed.success) {
+    return { error: "Input tidak valid" };
+  }
+
+  // Resolve the report's anchor settings → period + anchorDate, mirroring
+  // the editor page so the regenerated insight covers exactly the window
+  // the canvas previews.
+  const [template] = await db
+    .select()
+    .from(reportTemplates)
+    .where(
+      and(
+        eq(reportTemplates.id, parsed.data.templateId),
+        eq(reportTemplates.userId, session.user.id),
+      ),
+    )
+    .limit(1);
+  if (!template) {
+    return { error: "Report tidak ditemukan" };
+  }
+
+  let definition: TemplateDefinition;
+  try {
+    definition = parseTemplateDefinition(template.definition);
+  } catch (err) {
+    return {
+      error:
+        err instanceof Error
+          ? `Definisi report tidak valid: ${err.message.slice(0, 200)}`
+          : "Definisi report tidak valid",
+    };
+  }
+
+  const period =
+    definition.settings.anchor.kind === "auto_monthly" ? "monthly" : "weekly";
+  const anchorDate =
+    definition.settings.anchor.kind === "specific"
+      ? definition.settings.anchor.date
+      : undefined;
+
+  try {
+    const reportData = await fetchReportData({
+      userId: session.user.id,
+      period,
+      anchorDate,
+    });
+    const insight = await generateInsight({
+      userId: session.user.id,
+      reportData,
+    });
+    return { success: true, insight };
+  } catch (err) {
+    return {
+      error:
+        err instanceof Error ? err.message : "Generate gagal (unknown error)",
     };
   }
 }

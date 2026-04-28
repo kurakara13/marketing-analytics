@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { useState, useTransition } from "react";
+import { ChevronDown, ChevronRight, RefreshCw, Sparkles } from "lucide-react";
+import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -29,7 +31,9 @@ import {
   COMPUTED_METRIC_LABELS,
   getAvailableMetrics,
 } from "@/lib/reports/widgets/data-resolver";
+import { regenerateInsightForReportAction } from "@/app/(dashboard)/reports/actions";
 import { ImageUploadField } from "./image-upload-field";
+import { useEditorContext } from "./editor-context";
 
 // ─── Form dispatcher ────────────────────────────────────────────────────
 type Props = {
@@ -108,6 +112,8 @@ function ConfigBody({ widget, onUpdate }: Props) {
           }
         />
       );
+    case "ai_narrative":
+      return <AiNarrativeForm />;
     default:
       return (
         <Section title="Config">
@@ -118,6 +124,75 @@ function ConfigBody({ widget, onUpdate }: Props) {
         </Section>
       );
   }
+}
+
+// ─── AI Narrative form ──────────────────────────────────────────────────
+//
+// The AI Insight widget has no static config to edit on the canvas
+// (sections are fixed by the schema's defaults today). What it does
+// expose is a manual "Regenerate" trigger: the user changes business
+// context, syncs new data, or just wants a different angle, and runs
+// the AI again. The regenerated insight replaces the cached one in
+// EditorContext so the canvas preview updates immediately.
+function AiNarrativeForm() {
+  const { templateId, latestInsight, setLatestInsight } = useEditorContext();
+  const [isPending, startTransition] = useTransition();
+
+  function handleRegenerate() {
+    startTransition(async () => {
+      const result = await regenerateInsightForReportAction({ templateId });
+      if ("error" in result) {
+        toast.error(`Generate gagal: ${result.error}`);
+        return;
+      }
+      setLatestInsight(result.insight);
+      toast.success("AI insight berhasil di-regenerate.");
+    });
+  }
+
+  const generatedAt = latestInsight?.createdAt
+    ? new Date(latestInsight.createdAt).toLocaleString("id-ID", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      })
+    : null;
+
+  return (
+    <Section title="AI Insight">
+      <div className="flex flex-col gap-2 rounded-md border border-border/60 bg-muted/30 p-3">
+        <div className="flex items-start gap-2">
+          <Sparkles className="size-4 shrink-0 text-primary mt-0.5" />
+          <div className="flex flex-col gap-0.5">
+            <span className="text-xs font-medium">
+              Insight ter-generate via OpenAI GPT-5
+            </span>
+            <span className="text-muted-foreground text-[11px] leading-snug">
+              {generatedAt
+                ? `Versi terakhir: ${generatedAt}`
+                : "Belum ada insight ter-cache untuk periode ini."}
+            </span>
+          </div>
+        </div>
+        <Button
+          type="button"
+          variant="default"
+          size="sm"
+          onClick={handleRegenerate}
+          disabled={isPending}
+          className="w-full"
+        >
+          <RefreshCw
+            className={cn("size-3.5", isPending && "animate-spin")}
+          />
+          {isPending ? "Generating ulang..." : "Regenerate insight"}
+        </Button>
+        <p className="text-muted-foreground text-[10px] leading-snug">
+          Re-run AI dengan data terbaru + konteks bisnis dari Settings.
+          Butuh ~10–60 detik. Cached insight akan diganti.
+        </p>
+      </div>
+    </Section>
+  );
 }
 
 // ─── Section primitive ──────────────────────────────────────────────────

@@ -54,6 +54,12 @@ export function TemplateEditor({
       ? initialDefinition
       : createBlankTemplateDefinition(),
   );
+  // Latest cached AI insight is held in state so the regenerate button
+  // (in the ai_narrative widget side panel) can swap it without a full
+  // editor reload — canvas preview re-renders from the new insight.
+  const [currentInsight, setCurrentInsight] = useState<Insight | null>(
+    latestInsight,
+  );
   const [selectedSlideId, setSelectedSlideId] = useState<string>(
     () => definition.slides[0]?.id ?? "",
   );
@@ -365,7 +371,8 @@ export function TemplateEditor({
     <EditorProvider
       templateId={templateId}
       reportData={reportData}
-      latestInsight={latestInsight}
+      latestInsight={currentInsight}
+      setLatestInsight={setCurrentInsight}
     >
     <div className="flex h-full min-h-0 flex-1 flex-col gap-4">
       {/* Toolbar */}
