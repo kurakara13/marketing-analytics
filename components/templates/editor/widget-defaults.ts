@@ -6,6 +6,7 @@ import {
   imageWidgetConfigSchema,
   kpiCardWidgetConfigSchema,
   lineChartWidgetConfigSchema,
+  shapeWidgetConfigSchema,
   spacerWidgetConfigSchema,
   tableWidgetConfigSchema,
   textWidgetConfigSchema,
@@ -51,6 +52,13 @@ export const WIDGET_PALETTE_ITEMS: PaletteItem[] = [
     type: "image",
     label: "Image",
     description: "Logo atau gambar yang di-upload.",
+    category: "layout",
+    enabled: true,
+  },
+  {
+    type: "shape",
+    label: "Shape",
+    description: "Kotak, segitiga, parallelogram untuk decorative atau mask.",
     category: "layout",
     enabled: true,
   },
@@ -116,6 +124,7 @@ export const WIDGET_CATEGORY_LABELS: Record<WidgetCategory, string> = {
 const DEFAULT_POSITIONS: Record<WidgetType, Widget["position"]> = {
   text: { x: 1, y: 1, w: 6, h: 0.6 },
   image: { x: 4, y: 2, w: 4, h: 3 },
+  shape: { x: 1, y: 1, w: 3, h: 2 },
   divider: { x: 1, y: 3.5, w: 11, h: 0.05 },
   spacer: { x: 1, y: 1, w: 1, h: 1 },
   cover_block: { x: 1, y: 2, w: 11, h: 3 },
@@ -163,6 +172,13 @@ export function buildDefaultWidget(type: WidgetType): Widget {
         type,
         position,
         config: spacerWidgetConfigSchema.parse({}),
+      };
+    case "shape":
+      return {
+        id,
+        type,
+        position,
+        config: shapeWidgetConfigSchema.parse({}),
       };
     case "cover_block":
       return {

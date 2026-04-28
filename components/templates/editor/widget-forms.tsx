@@ -13,13 +13,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import type {
-  DataSource,
-  ImageWidgetConfig,
-  KpiCardWidgetConfig,
-  LineChartWidgetConfig,
-  TextWidgetConfig,
-  Widget,
+import {
+  SHAPE_KINDS,
+  type DataSource,
+  type ImageWidgetConfig,
+  type KpiCardWidgetConfig,
+  type LineChartWidgetConfig,
+  type ShapeWidgetConfig,
+  type TextWidgetConfig,
+  type Widget,
 } from "@/lib/reports/templates/types";
 import { getAvailableMetrics } from "@/lib/reports/widgets/data-resolver";
 import { ImageUploadField } from "./image-upload-field";
@@ -78,6 +80,15 @@ function ConfigBody({ widget, onUpdate }: Props) {
           config={widget.config}
           onChange={(next) =>
             onUpdate((w) => (w.type === "image" ? { ...w, config: next } : w))
+          }
+        />
+      );
+    case "shape":
+      return (
+        <ShapeForm
+          config={widget.config}
+          onChange={(next) =>
+            onUpdate((w) => (w.type === "shape" ? { ...w, config: next } : w))
           }
         />
       );
@@ -651,5 +662,108 @@ function ImageForm({
         </Select>
       </Field>
     </Section>
+  );
+}
+
+// ─── Shape widget form ──────────────────────────────────────────────────
+const SHAPE_LABELS: Record<(typeof SHAPE_KINDS)[number], string> = {
+  rect: "Rectangle",
+  roundRect: "Rounded rectangle",
+  ellipse: "Ellipse / Circle",
+  triangle: "Triangle",
+  rightTriangle: "Right triangle (corner cut)",
+  parallelogram: "Parallelogram",
+  trapezoid: "Trapezoid",
+  diamond: "Diamond",
+  line: "Line",
+};
+
+function ShapeForm({
+  config,
+  onChange,
+}: {
+  config: ShapeWidgetConfig;
+  onChange: (next: ShapeWidgetConfig) => void;
+}) {
+  return (
+    <>
+      <Section title="Shape">
+        <Field
+          label="Type"
+          hint="Right triangle bagus untuk 'cut' sudut image. Parallelogram untuk diagonal stripe."
+        >
+          <Select
+            value={config.kind}
+            onValueChange={(v) =>
+              v && onChange({ ...config, kind: v as ShapeWidgetConfig["kind"] })
+            }
+          >
+            <SelectTrigger size="sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SHAPE_KINDS.map((k) => (
+                <SelectItem key={k} value={k}>
+                  {SHAPE_LABELS[k]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <NumField
+          label="Rotation (°)"
+          value={config.rotation}
+          step={5}
+          min={-360}
+          max={360}
+          onChange={(v) => onChange({ ...config, rotation: v })}
+        />
+      </Section>
+
+      <Section title="Fill">
+        <ColorField
+          label="Color"
+          value={config.fillColor}
+          onChange={(v) => onChange({ ...config, fillColor: v })}
+        />
+        <Field
+          label="Opacity"
+          hint="0 = transparan (cuma border keluar), 1 = solid."
+        >
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={config.fillOpacity}
+            onChange={(e) =>
+              onChange({ ...config, fillOpacity: Number(e.target.value) })
+            }
+            className="accent-primary h-8 w-full"
+          />
+          <p className="text-muted-foreground text-[10px] tabular-nums">
+            {Math.round(config.fillOpacity * 100)}%
+          </p>
+        </Field>
+      </Section>
+
+      <Section title="Border">
+        <NumField
+          label="Width (pt)"
+          value={config.borderWidth}
+          step={0.5}
+          min={0}
+          max={20}
+          onChange={(v) => onChange({ ...config, borderWidth: v })}
+        />
+        {config.borderWidth > 0 ? (
+          <ColorField
+            label="Border color"
+            value={config.borderColor}
+            onChange={(v) => onChange({ ...config, borderColor: v })}
+          />
+        ) : null}
+      </Section>
+    </>
   );
 }

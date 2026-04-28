@@ -2,7 +2,10 @@
 
 import { BarChart3, Image as ImageIcon, LineChart, Table } from "lucide-react";
 
-import type { Widget } from "@/lib/reports/templates/types";
+import type {
+  ShapeWidgetConfig,
+  Widget,
+} from "@/lib/reports/templates/types";
 
 // Lightweight HTML/CSS preview of how a widget will look in PPT.
 // Not pixel-perfect — pptxgenjs renders the actual PPT, this is just
@@ -77,6 +80,9 @@ export function CanvasWidgetPreview({ widget }: { widget: Widget }) {
           (spacer)
         </div>
       );
+
+    case "shape":
+      return <ShapePreview config={widget.config} />;
 
     case "cover_block":
       return (
@@ -164,4 +170,91 @@ export function CanvasWidgetPreview({ widget }: { widget: Widget }) {
         </div>
       );
   }
+}
+
+// ─── Shape preview (SVG) ────────────────────────────────────────────────
+//
+// Each shape is drawn as an SVG `<path>` (or `<polygon>`) inside a
+// preserveAspectRatio="none" viewBox so the shape stretches to fill
+// whatever bounding box the user resizes the widget to. Stroke widths
+// are converted from PPT pt to SVG units; the visual approximation is
+// close enough for layout decisions without trying to match PPT
+// pixel-perfect.
+function ShapePreview({ config }: { config: ShapeWidgetConfig }) {
+  const fillVal =
+    config.fillOpacity <= 0 ? "transparent" : `#${config.fillColor}`;
+  const strokeVal =
+    config.borderWidth > 0 ? `#${config.borderColor}` : "transparent";
+  const strokeW = config.borderWidth;
+
+  const commonProps = {
+    fill: fillVal,
+    fillOpacity: config.fillOpacity,
+    stroke: strokeVal,
+    strokeWidth: strokeW,
+    vectorEffect: "non-scaling-stroke" as const,
+  };
+
+  // viewBox 0..100 with shapes filling. preserveAspectRatio="none"
+  // lets the SVG stretch to widget aspect ratio.
+  const inner = (() => {
+    switch (config.kind) {
+      case "rect":
+        return <rect x={0} y={0} width={100} height={100} {...commonProps} />;
+      case "roundRect":
+        return (
+          <rect
+            x={0}
+            y={0}
+            width={100}
+            height={100}
+            rx={6}
+            ry={6}
+            {...commonProps}
+          />
+        );
+      case "ellipse":
+        return (
+          <ellipse cx={50} cy={50} rx={50} ry={50} {...commonProps} />
+        );
+      case "triangle":
+        return <polygon points="50,0 100,100 0,100" {...commonProps} />;
+      case "rightTriangle":
+        return <polygon points="0,0 0,100 100,100" {...commonProps} />;
+      case "parallelogram":
+        // Slants right by ~25% of width; matches pptxgenjs default.
+        return <polygon points="25,0 100,0 75,100 0,100" {...commonProps} />;
+      case "trapezoid":
+        return <polygon points="20,0 80,0 100,100 0,100" {...commonProps} />;
+      case "diamond":
+        return (
+          <polygon points="50,0 100,50 50,100 0,50" {...commonProps} />
+        );
+      case "line":
+        return (
+          <line
+            x1={0}
+            y1={50}
+            x2={100}
+            y2={50}
+            stroke={fillVal}
+            strokeWidth={Math.max(strokeW, 2)}
+            vectorEffect="non-scaling-stroke"
+          />
+        );
+    }
+  })();
+
+  return (
+    <svg
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+      className="block size-full"
+      style={{
+        transform: config.rotation ? `rotate(${config.rotation}deg)` : undefined,
+      }}
+    >
+      {inner}
+    </svg>
+  );
 }

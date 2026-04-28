@@ -6,6 +6,7 @@ import "./text";
 import "./kpi-card";
 import "./line-chart";
 import "./image";
+import "./shape";
 
 // Re-export the lookup API so callers can `import { getWidgetDefinition }
 // from "@/lib/reports/widgets"` and trust that all types are loaded.

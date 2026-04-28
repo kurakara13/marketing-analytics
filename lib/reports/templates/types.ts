@@ -97,6 +97,33 @@ export type DividerWidgetConfig = z.infer<typeof dividerWidgetConfigSchema>;
 export const spacerWidgetConfigSchema = z.object({});
 export type SpacerWidgetConfig = z.infer<typeof spacerWidgetConfigSchema>;
 
+// 4b) Shape — geometric primitive with solid fill + optional border.
+// Shape names map directly onto pptxgenjs preset shapes; the SVG
+// preview on the canvas mirrors the same geometry visually.
+export const SHAPE_KINDS = [
+  "rect",
+  "roundRect",
+  "ellipse",
+  "triangle",
+  "rightTriangle",
+  "parallelogram",
+  "trapezoid",
+  "diamond",
+  "line",
+] as const;
+export const shapeWidgetConfigSchema = z.object({
+  kind: z.enum(SHAPE_KINDS).default("rect"),
+  fillColor: z.string().regex(/^[0-9A-Fa-f]{6}$/).default("3B82F6"),
+  /** 0 = transparent fill (outline only). 1 = full opaque. */
+  fillOpacity: z.number().min(0).max(1).default(1),
+  borderColor: z.string().regex(/^[0-9A-Fa-f]{6}$/).default("0F172A"),
+  borderWidth: z.number().min(0).max(20).default(0),
+  /** Rotation in degrees (PPT supports 0..360). */
+  rotation: z.number().min(-360).max(360).default(0),
+});
+export type ShapeWidgetConfig = z.infer<typeof shapeWidgetConfigSchema>;
+export type ShapeKind = (typeof SHAPE_KINDS)[number];
+
 // 5) Cover block (title + subtitle + date)
 export const coverBlockWidgetConfigSchema = z.object({
   title: z.string().default(""),
@@ -222,6 +249,12 @@ export const widgetSchema = z.discriminatedUnion("type", [
     type: z.literal("spacer"),
     position: positionSchema,
     config: spacerWidgetConfigSchema,
+  }),
+  z.object({
+    id: z.string(),
+    type: z.literal("shape"),
+    position: positionSchema,
+    config: shapeWidgetConfigSchema,
   }),
   z.object({
     id: z.string(),

@@ -13,6 +13,7 @@ import {
   LineChart,
   Minus,
   SendToBack,
+  Shapes,
   Sparkles,
   Square,
   Table,
@@ -51,6 +52,7 @@ type Props = {
 const ICONS: Record<WidgetType, typeof Type> = {
   text: Type,
   image: ImageIcon,
+  shape: Shapes,
   divider: Minus,
   spacer: Square,
   cover_block: LayoutTemplate,
@@ -286,6 +288,7 @@ function WidgetConfigPanel({
   const labelMap: Record<WidgetType, string> = {
     text: "Text",
     image: "Image",
+    shape: "Shape",
     divider: "Divider",
     spacer: "Spacer",
     cover_block: "Cover Block",
