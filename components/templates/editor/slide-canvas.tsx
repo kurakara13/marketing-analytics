@@ -83,9 +83,19 @@ export function SlideCanvas({
     return () => observer.disconnect();
   }, []);
 
-  const pxPerInch = fitPxPerInch * zoom;
+  // Zoom is purely visual — applied via CSS transform on the canvas
+  // wrapper. The widget pxPerInch is kept constant at fitPxPerInch so
+  // every widget's pixel position and size stays untouched at every
+  // zoom level (matches PowerPoint's zoom semantics: it's a viewport
+  // scale, never a re-layout).
+  const pxPerInch = fitPxPerInch;
   const canvasW = SLIDE_W_INCHES * pxPerInch;
   const canvasH = SLIDE_H_INCHES * pxPerInch;
+  // Post-scale dimensions — used as the size of the outer "spacer"
+  // box so the scrollable container knows how much room the visually
+  // scaled canvas takes up.
+  const scaledW = canvasW * zoom;
+  const scaledH = canvasH * zoom;
 
   // ─── Zoom controls ────────────────────────────────────────────────────
   const clampZoom = useCallback(
@@ -170,39 +180,48 @@ export function SlideCanvas({
         "bg-[radial-gradient(circle_at_50%_30%,rgba(15,23,42,0.04),transparent_70%)]",
       )}
     >
-      {/* Plain div, NOT motion.div with layout — when the user zooms,
-          pxPerInch changes and so do canvasW/canvasH plus every widget's
-          pixel position. Animating the canvas dimensions with a 250 ms
-          transition while child widget positions update synchronously
-          made widgets briefly appear at the new (zoomed) positions
-          before the canvas had finished resizing — the layout looked
-          broken mid-transition. Updating instantly in lockstep with
-          the widgets keeps zoom visually crisp. */}
+      {/* Two-layer wrapper. The outer "spacer" has the post-scale
+          dimensions so the scrollable container knows the visual
+          footprint when zoomed > 100%. The inner canvas has its
+          natural pre-scale dimensions plus a CSS transform that
+          scales it visually — widget pixel positions inside stay
+          completely untouched. This matches PowerPoint's zoom: a
+          viewport scale, not a re-layout. */}
       <div
-        className="relative ring-1 ring-black/5 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.18)]"
         style={{
-          width: canvasW,
-          height: canvasH,
-          backgroundColor: `#${slide.background}`,
-          // Slide background image overrides the grid; we drop the
-          // grid pattern when an image is set so the canvas matches
-          // the rendered PPT.
-          backgroundImage: slide.backgroundImage
-            ? `url(/api/uploads/${slide.backgroundImage})`
-            : "linear-gradient(rgba(15,23,42,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(15,23,42,0.04) 1px, transparent 1px)",
-          backgroundSize: slide.backgroundImage
-            ? "cover"
-            : `${pxPerInch}px ${pxPerInch}px`,
-          backgroundPosition: slide.backgroundImage ? "center" : undefined,
-          backgroundRepeat: slide.backgroundImage ? "no-repeat" : undefined,
-        }}
-        onClick={(e) => {
-          // Clicking empty canvas = deselect.
-          if (e.target === e.currentTarget) {
-            onSelectWidget(null);
-          }
+          width: scaledW,
+          height: scaledH,
+          flexShrink: 0,
+          position: "relative",
         }}
       >
+        <div
+          className="absolute left-0 top-0 ring-1 ring-black/5 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.18)]"
+          style={{
+            width: canvasW,
+            height: canvasH,
+            transform: `scale(${zoom})`,
+            transformOrigin: "0 0",
+            backgroundColor: `#${slide.background}`,
+            // Slide background image overrides the grid; we drop the
+            // grid pattern when an image is set so the canvas matches
+            // the rendered PPT.
+            backgroundImage: slide.backgroundImage
+              ? `url(/api/uploads/${slide.backgroundImage})`
+              : "linear-gradient(rgba(15,23,42,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(15,23,42,0.04) 1px, transparent 1px)",
+            backgroundSize: slide.backgroundImage
+              ? "cover"
+              : `${pxPerInch}px ${pxPerInch}px`,
+            backgroundPosition: slide.backgroundImage ? "center" : undefined,
+            backgroundRepeat: slide.backgroundImage ? "no-repeat" : undefined,
+          }}
+          onClick={(e) => {
+            // Clicking empty canvas = deselect.
+            if (e.target === e.currentTarget) {
+              onSelectWidget(null);
+            }
+          }}
+        >
         <AnimatePresence>
           {slide.widgets.map((widget) => (
             <CanvasWidget
@@ -212,6 +231,7 @@ export function SlideCanvas({
               onSelect={() => onSelectWidget(widget.id)}
               onUpdate={(updater) => onUpdateWidget(widget.id, updater)}
               pxPerInch={pxPerInch}
+              zoom={zoom}
             />
           ))}
         </AnimatePresence>
@@ -232,6 +252,7 @@ export function SlideCanvas({
             </p>
           </motion.div>
         ) : null}
+        </div>
       </div>
 
       {/* Scale info: bottom-left, doesn't scroll with canvas */}
@@ -297,12 +318,14 @@ function CanvasWidget({
   onSelect,
   onUpdate,
   pxPerInch,
+  zoom,
 }: {
   widget: Widget;
   isSelected: boolean;
   onSelect: () => void;
   onUpdate: (updater: (w: Widget) => Widget) => void;
   pxPerInch: number;
+  zoom: number;
 }) {
   const snapPx = SNAP_INCHES * pxPerInch;
 
@@ -322,6 +345,10 @@ function CanvasWidget({
       size={{ width: positionPx.width, height: positionPx.height }}
       position={{ x: positionPx.x, y: positionPx.y }}
       bounds="parent"
+      // Tell react-rnd that the parent is CSS-scaled by `zoom`. Without
+      // this the mouse-pixel deltas read at scale != 1 would be wrong
+      // (drag drift / resize amplification).
+      scale={zoom}
       onDragStart={onSelect}
       onResizeStart={onSelect}
       onDragStop={(_, d) => {
