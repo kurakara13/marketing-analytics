@@ -5,6 +5,8 @@ import { auth } from "@/lib/auth";
 import { getUsageStatus, listInsightsForUser } from "@/lib/ai/insights";
 import { getFeedbackForInsight } from "@/lib/insight-feedback";
 import { listConnectionsForUser } from "@/lib/connections";
+import { detectInterestingPeriods } from "@/lib/period-detection";
+import { SuggestedPeriods } from "@/components/insights/suggested-periods";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -22,9 +24,10 @@ export default async function InsightsPage() {
   if (!session?.user?.id) redirect("/login");
 
   const userId = session.user.id;
-  const [insights, usage] = await Promise.all([
+  const [insights, usage, suggestedPeriods] = await Promise.all([
     listInsightsForUser(userId),
     getUsageStatus(userId),
+    detectInterestingPeriods(userId),
   ]);
 
   // Pull all feedback rows in parallel — one query per insight is fine
@@ -64,6 +67,8 @@ export default async function InsightsPage() {
         </div>
         <GenerateInsightsButton />
       </div>
+
+      <SuggestedPeriods suggestions={suggestedPeriods} />
 
       {insights.length === 0 ? (
         <InsightsEmptyState userId={userId} />

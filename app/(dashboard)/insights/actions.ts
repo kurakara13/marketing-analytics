@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
 import { auth } from "@/lib/auth";
 import { generateInsight } from "@/lib/ai/insights";
@@ -10,19 +11,36 @@ export type GenerateResult =
   | { error: string }
   | { success: true; insightId: string };
 
-export async function generateInsightAction(): Promise<GenerateResult> {
+const generateInput = z
+  .object({
+    period: z.enum(["weekly", "monthly"]).default("weekly"),
+    /** Anchor date inside the target period. When omitted, the
+     *  fetcher defaults to the last completed period. */
+    anchorDate: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal harus YYYY-MM-DD")
+      .optional(),
+  })
+  .default({ period: "weekly" });
+
+export async function generateInsightAction(
+  input?: z.infer<typeof generateInput>,
+): Promise<GenerateResult> {
   const session = await auth();
   if (!session?.user?.id) {
     return { error: "Tidak ada session aktif" };
   }
 
+  const parsed = generateInput.safeParse(input ?? {});
+  if (!parsed.success) {
+    return { error: "Input tidak valid" };
+  }
+
   try {
-    // Default the legacy /insights page to the weekly window — same
-    // shape the report builder uses. Users with monthly preference
-    // should generate from their report template instead.
     const reportData = await fetchReportData({
       userId: session.user.id,
-      period: "weekly",
+      period: parsed.data.period,
+      anchorDate: parsed.data.anchorDate,
     });
     const insight = await generateInsight({
       userId: session.user.id,
