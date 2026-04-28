@@ -349,8 +349,11 @@ export function TemplateEditor({
         </Button>
       </header>
 
-      {/* 3-panel layout */}
-      <div className="grid min-h-0 flex-1 grid-cols-[240px_1fr_340px] gap-4">
+      {/* 3-panel layout — grid-rows-1 (= minmax(0,1fr)) makes the row
+          fill the available height while letting children shrink below
+          their natural size; without it the row defaults to `auto` and
+          tall content overflows the viewport. */}
+      <div className="grid min-h-0 flex-1 grid-cols-[240px_1fr_340px] grid-rows-1 gap-4">
         <SlideList
           slides={definition.slides}
           selectedSlideId={selectedSlideId}
