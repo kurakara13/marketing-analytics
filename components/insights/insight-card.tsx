@@ -1,7 +1,15 @@
-import { AlertCircle, Info, AlertTriangle, Sparkles } from "lucide-react";
+import Link from "next/link";
+import {
+  AlertCircle,
+  ArrowLeftRight,
+  Info,
+  AlertTriangle,
+  Sparkles,
+} from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
 
+import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -61,7 +69,17 @@ const PRIORITY_STYLES: Record<
   },
 };
 
-export function InsightCard({ insight }: { insight: Insight }) {
+export function InsightCard({
+  insight,
+  previousInsightId,
+}: {
+  insight: Insight;
+  /** When set, renders a "Bandingkan" button that links to the
+   *  comparison view with this insight as `a` (newer) and the previous
+   *  one as `b` (older). Pass null to hide — typically used when there's
+   *  no previous insight to compare against. */
+  previousInsightId?: string | null;
+}) {
   const ago = formatDistanceToNow(insight.createdAt, {
     addSuffix: true,
     locale: idLocale,
@@ -80,6 +98,18 @@ export function InsightCard({ insight }: { insight: Insight }) {
               Dibuat {ago} · {insight.windowDays} hari · {insight.modelUsed}
             </CardDescription>
           </div>
+          {previousInsightId ? (
+            <Link
+              href={`/insights/compare?a=${insight.id}&b=${previousInsightId}`}
+              className={cn(
+                buttonVariants({ variant: "outline", size: "sm" }),
+                "shrink-0",
+              )}
+            >
+              <ArrowLeftRight className="size-3.5" />
+              Bandingkan
+            </Link>
+          ) : null}
         </div>
       </CardHeader>
 

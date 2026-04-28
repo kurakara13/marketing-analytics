@@ -54,9 +54,19 @@ export default async function InsightsPage() {
         </Card>
       ) : (
         <div className="grid gap-4">
-          {insights.map((insight) => (
-            <InsightCard key={insight.id} insight={insight} />
-          ))}
+          {insights.map((insight, idx) => {
+            // The list is sorted by createdAt desc, so the next item in
+            // the array is the immediately-previous insight in time.
+            // Pass its id so the card can link straight to /compare.
+            const previousInsightId = insights[idx + 1]?.id ?? null;
+            return (
+              <InsightCard
+                key={insight.id}
+                insight={insight}
+                previousInsightId={previousInsightId}
+              />
+            );
+          })}
         </div>
       )}
     </div>

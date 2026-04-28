@@ -470,3 +470,47 @@ export async function listInsightsForUser(userId: string): Promise<Insight[]> {
   });
   return rows;
 }
+
+/**
+ * Look up an insight by id, scoped to a user. Used by the comparison
+ * page to fetch both sides — we always check userId so a malicious
+ * `?a=...&b=...` can't reach another user's rows.
+ */
+export async function findInsightByIdForUser(args: {
+  userId: string;
+  insightId: string;
+}): Promise<Insight | null> {
+  const row = await db.query.insights.findFirst({
+    where: (insight, { and, eq }) =>
+      and(eq(insight.userId, args.userId), eq(insight.id, args.insightId)),
+  });
+  return row ?? null;
+}
+
+/**
+ * Find the next-older insight for the same user as `insightId`, useful
+ * for "Compare with previous" links on the insights list. Matches by
+ * createdAt < this insight's createdAt; returns the closest preceding
+ * row regardless of period (weekly vs monthly) so the user can compare
+ * any two adjacent generations.
+ */
+export async function findPreviousInsightFor(args: {
+  userId: string;
+  insightId: string;
+}): Promise<Insight | null> {
+  const current = await findInsightByIdForUser({
+    userId: args.userId,
+    insightId: args.insightId,
+  });
+  if (!current) return null;
+
+  const row = await db.query.insights.findFirst({
+    where: (insight, { and, eq, lt }) =>
+      and(
+        eq(insight.userId, args.userId),
+        lt(insight.createdAt, current.createdAt),
+      ),
+    orderBy: (insight, { desc }) => [desc(insight.createdAt)],
+  });
+  return row ?? null;
+}
