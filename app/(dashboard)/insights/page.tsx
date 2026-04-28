@@ -6,6 +6,9 @@ import { getUsageStatus, listInsightsForUser } from "@/lib/ai/insights";
 import { getFeedbackForInsight } from "@/lib/insight-feedback";
 import { listConnectionsForUser } from "@/lib/connections";
 import { detectInterestingPeriods } from "@/lib/period-detection";
+import { db } from "@/lib/db";
+import { insightDrilldowns, type InsightDrilldown } from "@/lib/db/schema";
+import { eq, inArray } from "drizzle-orm";
 import { SuggestedPeriods } from "@/components/insights/suggested-periods";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -38,6 +41,27 @@ export default async function InsightsPage() {
       getFeedbackForInsight({ userId, insightId: i.id }),
     ),
   );
+
+  // Single batched query for all cached drilldowns across the
+  // displayed insights, then group by insightId for per-card lookup.
+  const drilldownRows: InsightDrilldown[] = insights.length
+    ? await db
+        .select()
+        .from(insightDrilldowns)
+        .where(
+          inArray(
+            insightDrilldowns.insightId,
+            insights.map((i) => i.id),
+          ),
+        )
+    : [];
+  const drilldownsByInsight = new Map<string, Map<number, InsightDrilldown>>();
+  for (const row of drilldownRows) {
+    const inner =
+      drilldownsByInsight.get(row.insightId) ?? new Map<number, InsightDrilldown>();
+    inner.set(row.observationIndex, row);
+    drilldownsByInsight.set(row.insightId, inner);
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -85,6 +109,9 @@ export default async function InsightsPage() {
                 insight={insight}
                 previousInsightId={previousInsightId}
                 feedback={feedbackPerInsight[idx]}
+                drilldownsByIndex={
+                  drilldownsByInsight.get(insight.id) ?? new Map()
+                }
               />
             );
           })}

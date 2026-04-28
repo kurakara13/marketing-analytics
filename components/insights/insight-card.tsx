@@ -24,12 +24,14 @@ import type {
   InsightObservation,
   InsightRecommendation,
 } from "@/lib/db/schema";
+import type { InsightDrilldown } from "@/lib/db/schema";
 import {
   feedbackKey,
   type InsightFeedbackMap,
 } from "@/lib/insight-feedback";
 import { FeedbackButtons } from "./feedback-buttons";
 import { ShareButton } from "./share-button";
+import { DrilldownButton } from "./drilldown-button";
 
 const SEVERITY_STYLES: Record<
   InsightObservation["severity"],
@@ -80,6 +82,7 @@ export function InsightCard({
   previousInsightId,
   feedback,
   showShare = true,
+  drilldownsByIndex,
 }: {
   insight: Insight;
   /** When set, renders a "Bandingkan" button that links to the
@@ -96,6 +99,10 @@ export function InsightCard({
   /** Hide the share button — used by the public share page itself
    *  (recipients can't share further) and any other read-only context. */
   showShare?: boolean;
+  /** Pre-fetched drilldowns keyed by observationIndex. When omitted,
+   *  the drilldown button still works but starts in "no cache" state.
+   *  Public share view should pass an empty Map to disable. */
+  drilldownsByIndex?: Map<number, InsightDrilldown>;
 }) {
   const ago = formatDistanceToNow(insight.createdAt, {
     addSuffix: true,
@@ -154,6 +161,13 @@ export function InsightCard({
                   const rating = feedback?.get(
                     feedbackKey({ kind: "observation", itemIndex: i }),
                   ) ?? 0;
+                  // Drilldown is only meaningful for severity that
+                  // suggests a problem worth investigating. Plain
+                  // info observations don't get a button to keep the
+                  // UI un-cluttered.
+                  const isInvestigable =
+                    drilldownsByIndex !== undefined &&
+                    (o.severity === "warning" || o.severity === "alert");
                   return (
                     <li
                       key={i}
@@ -177,6 +191,15 @@ export function InsightCard({
                       <p className="text-foreground/90 text-sm leading-relaxed">
                         {o.description}
                       </p>
+                      {isInvestigable ? (
+                        <div className="mt-2 flex justify-end">
+                          <DrilldownButton
+                            insightId={insight.id}
+                            observationIndex={i}
+                            initial={drilldownsByIndex.get(i) ?? null}
+                          />
+                        </div>
+                      ) : null}
                     </li>
                   );
                 })}
