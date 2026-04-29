@@ -15,6 +15,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { reportTemplates } from "@/lib/db/schema";
 import { listConnectionsForUser } from "@/lib/connections";
+import { PageHeader } from "@/components/layout/page-header";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -52,22 +53,20 @@ export default async function ReportsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
-          <p className="text-muted-foreground text-sm">
-            Susun layout report Anda — drag widget di canvas, pilih data
-            source, generate jadi .pptx kapan saja.
-          </p>
-        </div>
-        <form action={createTemplateAction}>
-          <input type="hidden" name="name" value="Untitled report" />
-          <Button type="submit">
-            <Plus className="size-4" />
-            New blank report
-          </Button>
-        </form>
-      </div>
+      <PageHeader
+        icon={FileText}
+        title="Reports"
+        subtitle="Susun layout report Anda — drag widget di canvas, pilih data source, generate jadi .pptx kapan saja."
+        actions={
+          <form action={createTemplateAction}>
+            <input type="hidden" name="name" value="Untitled report" />
+            <Button type="submit">
+              <Plus className="size-4" />
+              New blank report
+            </Button>
+          </form>
+        }
+      />
 
       {reports.length === 0 ? (
         <ReportsEmptyState hasConnection={hasConnection} />

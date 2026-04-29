@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { History } from "lucide-react";
+import { Database, History } from "lucide-react";
 
 import { auth } from "@/lib/auth";
 import { connectors } from "@/lib/connectors/registry";
@@ -9,6 +9,7 @@ import { listConnectionsWithSyncForUser } from "@/lib/connections";
 import { ConnectorCard } from "@/components/data-sources/connector-card";
 import { OAuthStatusToast } from "@/components/data-sources/oauth-status-toast";
 import { SyncAllButton } from "@/components/data-sources/sync-all-button";
+import { PageHeader } from "@/components/layout/page-header";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -25,29 +26,25 @@ export default async function DataSourcesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Data Sources
-          </h1>
-          <p className="text-muted-foreground text-sm">
-            Hubungkan platform iklan dan analitik Anda. Setiap koneksi
-            memberikan akses read-only ke data Anda.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {hasActiveConnection ? (
-            <Link
-              href="/data-sources/history"
-              className={cn(buttonVariants({ variant: "outline" }))}
-            >
-              <History className="size-4" />
-              History
-            </Link>
-          ) : null}
-          {hasActiveConnection ? <SyncAllButton /> : null}
-        </div>
-      </div>
+      <PageHeader
+        icon={Database}
+        title="Data Sources"
+        subtitle="Hubungkan platform iklan dan analitik Anda. Setiap koneksi memberikan akses read-only ke data Anda."
+        actions={
+          hasActiveConnection ? (
+            <>
+              <Link
+                href="/data-sources/history"
+                className={cn(buttonVariants({ variant: "outline" }))}
+              >
+                <History className="size-4" />
+                History
+              </Link>
+              <SyncAllButton />
+            </>
+          ) : null
+        }
+      />
 
       {/* Suspense is required because OAuthStatusToast uses useSearchParams,
           which deopts the route to client rendering otherwise. */}

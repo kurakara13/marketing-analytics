@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { Sparkles } from "lucide-react";
 
 import { auth } from "@/lib/auth";
 import { getUsageStatus, listInsightsForUser } from "@/lib/ai/insights";
@@ -22,6 +23,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { PageHeader } from "@/components/layout/page-header";
 import { GenerateInsightsButton } from "@/components/insights/generate-insights-button";
 import { InsightCard } from "@/components/insights/insight-card";
 import { InsightCardCompact } from "@/components/insights/insight-card-compact";
@@ -74,16 +76,14 @@ export default async function InsightsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Insights</h1>
-          <p className="text-muted-foreground text-sm">
-            Analisis data marketing Anda dengan AI. Setiap generate
-            menghasilkan ringkasan, observasi, dan rekomendasi yang actionable.
-          </p>
+      <PageHeader
+        icon={Sparkles}
+        title="Insights"
+        subtitle="Analisis data marketing Anda dengan AI. Setiap generate menghasilkan ringkasan, observasi, dan rekomendasi yang actionable."
+        meta={
           <p
             className={cn(
-              "mt-1 text-xs",
+              "text-xs",
               usage.remaining === 0
                 ? "text-rose-600"
                 : usage.remaining <= 3
@@ -98,9 +98,9 @@ export default async function InsightsPage() {
               ? ` · slot insight berikutnya ${usage.resetsAt.toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" })}`
               : null}
           </p>
-        </div>
-        <GenerateInsightsButton />
-      </div>
+        }
+        actions={<GenerateInsightsButton />}
+      />
 
       <SuggestedPeriods suggestions={suggestedPeriods} />
 

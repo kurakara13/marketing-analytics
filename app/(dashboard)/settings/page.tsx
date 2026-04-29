@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
+import { Settings as SettingsIcon } from "lucide-react";
 
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -12,6 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { PageHeader } from "@/components/layout/page-header";
 import { MonthlyTargetsForm } from "@/components/settings/monthly-targets-form";
 import { BusinessContextForm } from "@/components/settings/business-context-form";
 
@@ -34,12 +36,11 @@ export default async function SettingsPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-        <p className="text-muted-foreground text-sm">
-          Pengaturan akun dan preferensi.
-        </p>
-      </div>
+      <PageHeader
+        icon={SettingsIcon}
+        title="Settings"
+        subtitle="Pengaturan akun dan preferensi yang menentukan bagaimana AI menganalisis data Anda."
+      />
 
       <Card>
         <CardHeader>

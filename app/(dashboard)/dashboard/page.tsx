@@ -18,6 +18,7 @@ import { listConnectionsWithSyncForUser } from "@/lib/connections";
 import { OnboardingChecklist } from "@/components/onboarding/onboarding-checklist";
 import { MorningBrief } from "@/components/dashboard/morning-brief";
 import { SyncHealthSummary } from "@/components/dashboard/sync-health-summary";
+import { PageHeader } from "@/components/layout/page-header";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -120,30 +121,30 @@ export default async function DashboardPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Selamat datang{greetingName ? `, ${greetingName}` : ""}.
-          </h1>
-          <p className="text-muted-foreground text-sm">
+      <PageHeader
+        title={`Selamat datang${greetingName ? `, ${greetingName}` : ""}.`}
+        subtitle={
+          <>
             Ringkasan {windowDays} hari terakhir vs {windowDays} hari
             sebelumnya, dari {summary.connectedSources} koneksi aktif.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Suspense fallback={null}>
-            <RangePicker defaultDays={DEFAULT_DAYS} />
-          </Suspense>
-          <a
-            href={`/api/export/daily-metrics?days=${windowDays}`}
-            download
-            className={cn(buttonVariants({ variant: "outline" }))}
-          >
-            <Download className="size-4" />
-            Export CSV
-          </a>
-        </div>
-      </div>
+          </>
+        }
+        actions={
+          <>
+            <Suspense fallback={null}>
+              <RangePicker defaultDays={DEFAULT_DAYS} />
+            </Suspense>
+            <a
+              href={`/api/export/daily-metrics?days=${windowDays}`}
+              download
+              className={cn(buttonVariants({ variant: "outline" }))}
+            >
+              <Download className="size-4" />
+              Export CSV
+            </a>
+          </>
+        }
+      />
 
       {!onboardingComplete ? (
         <OnboardingChecklist steps={onboardingSteps} variant="compact" />
