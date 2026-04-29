@@ -83,6 +83,7 @@ export function InsightCard({
   previousInsightId,
   feedback,
   showShare = true,
+  linkTitle = false,
   drilldownsByIndex,
 }: {
   insight: Insight;
@@ -100,6 +101,10 @@ export function InsightCard({
   /** Hide the share button — used by the public share page itself
    *  (recipients can't share further) and any other read-only context. */
   showShare?: boolean;
+  /** When true, render the card title as a link to /insights/<id>.
+   *  Used by the list page so each card is navigable to its
+   *  permalink. Detail page itself passes false (no self-link). */
+  linkTitle?: boolean;
   /** Pre-fetched drilldowns keyed by observationIndex. When omitted,
    *  the drilldown button still works but starts in "no cache" state.
    *  Public share view should pass an empty Map to disable. */
@@ -117,9 +122,18 @@ export function InsightCard({
           <div className="min-w-0 flex-1">
             <CardTitle className="flex items-center gap-2">
               <Sparkles className="size-4 shrink-0" />
-              <span className="min-w-0">
-                {insight.title ?? `Insight ${insight.windowStart} → ${insight.windowEnd}`}
-              </span>
+              {linkTitle ? (
+                <Link
+                  href={`/insights/${insight.id}`}
+                  className="min-w-0 hover:underline underline-offset-4"
+                >
+                  {insight.title ?? `Insight ${insight.windowStart} → ${insight.windowEnd}`}
+                </Link>
+              ) : (
+                <span className="min-w-0">
+                  {insight.title ?? `Insight ${insight.windowStart} → ${insight.windowEnd}`}
+                </span>
+              )}
             </CardTitle>
             <CardDescription>
               {insight.windowStart} → {insight.windowEnd} · dibuat {ago} ·{" "}

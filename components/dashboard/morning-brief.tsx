@@ -64,9 +64,12 @@ export function MorningBrief({ insight }: { insight: Insight }) {
           <div className="min-w-0 flex-1">
             <CardTitle className="flex items-center gap-2 text-base">
               <Sparkles className="size-4 shrink-0 text-primary" />
-              <span className="min-w-0">
+              <Link
+                href={`/insights/${insight.id}`}
+                className="min-w-0 hover:underline underline-offset-4"
+              >
                 {insight.title ?? `AI brief — ${insight.windowStart} → ${insight.windowEnd}`}
-              </span>
+              </Link>
             </CardTitle>
             <CardDescription className="text-xs">
               {insight.windowStart} → {insight.windowEnd} · {ago} ·{" "}
@@ -74,7 +77,7 @@ export function MorningBrief({ insight }: { insight: Insight }) {
             </CardDescription>
           </div>
           <Link
-            href="/insights"
+            href={`/insights/${insight.id}`}
             className={cn(
               buttonVariants({ variant: "outline", size: "sm" }),
               "shrink-0",

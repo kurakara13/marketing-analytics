@@ -112,6 +112,7 @@ export default async function InsightsPage() {
                 drilldownsByIndex={
                   drilldownsByInsight.get(insight.id) ?? new Map()
                 }
+                linkTitle
               />
             );
           })}
