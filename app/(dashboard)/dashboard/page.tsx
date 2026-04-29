@@ -14,8 +14,10 @@ import { auth } from "@/lib/auth";
 import { getCampaignBreakdown, getMetricsSummary } from "@/lib/metrics-queries";
 import { getOnboardingSteps } from "@/lib/onboarding";
 import { listInsightsForUser } from "@/lib/ai/insights";
+import { listConnectionsWithSyncForUser } from "@/lib/connections";
 import { OnboardingChecklist } from "@/components/onboarding/onboarding-checklist";
 import { MorningBrief } from "@/components/dashboard/morning-brief";
+import { SyncHealthSummary } from "@/components/dashboard/sync-health-summary";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -49,13 +51,19 @@ export default async function DashboardPage({
   const windowDays = parseDaysParam(params?.days);
 
   const greetingName = session.user.name ?? session.user.email ?? "";
-  const [summary, campaignRows, onboardingSteps, recentInsights] =
-    await Promise.all([
-      getMetricsSummary({ userId: session.user.id, days: windowDays }),
-      getCampaignBreakdown({ userId: session.user.id, days: windowDays }),
-      getOnboardingSteps(session.user.id),
-      listInsightsForUser(session.user.id),
-    ]);
+  const [
+    summary,
+    campaignRows,
+    onboardingSteps,
+    recentInsights,
+    connectionsWithSync,
+  ] = await Promise.all([
+    getMetricsSummary({ userId: session.user.id, days: windowDays }),
+    getCampaignBreakdown({ userId: session.user.id, days: windowDays }),
+    getOnboardingSteps(session.user.id),
+    listInsightsForUser(session.user.id),
+    listConnectionsWithSyncForUser(session.user.id),
+  ]);
   const onboardingComplete = onboardingSteps.every((s) => s.done);
   const latestInsight = recentInsights[0] ?? null;
 
@@ -140,6 +148,8 @@ export default async function DashboardPage({
       {!onboardingComplete ? (
         <OnboardingChecklist steps={onboardingSteps} variant="compact" />
       ) : null}
+
+      <SyncHealthSummary connections={connectionsWithSync} />
 
       {latestInsight ? <MorningBrief insight={latestInsight} /> : null}
 
