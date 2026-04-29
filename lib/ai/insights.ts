@@ -43,6 +43,10 @@ export const DAILY_INSIGHT_QUOTA = 30;
 // properties in `required`, `additionalProperties: false` everywhere)
 // — this schema satisfies that.
 const InsightContentSchema = z.object({
+  /** Short headline-style title (5–9 kata) yang merangkum temuan utama
+   *  insight ini. Membedakan satu insight dengan yang lain di list.
+   *  Bahasa: Indonesia, kalimat lugas, hindari clickbait. */
+  title: z.string().min(8).max(120),
   executiveSummary: z.string().min(20, "Executive summary must be substantive"),
   observations: z
     .array(
@@ -71,8 +75,9 @@ type InsightContent = z.infer<typeof InsightContentSchema>;
 const INSIGHT_JSON_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["executiveSummary", "observations", "recommendations"],
+  required: ["title", "executiveSummary", "observations", "recommendations"],
   properties: {
+    title: { type: "string" },
     executiveSummary: { type: "string" },
     observations: {
       type: "array",
@@ -551,6 +556,7 @@ export async function generateInsight(args: {
       windowDays,
       windowStart: reportData.windowStart,
       windowEnd: reportData.windowEnd,
+      title: parsed.title,
       executiveSummary: parsed.executiveSummary,
       observations: parsed.observations,
       recommendations: parsed.recommendations,

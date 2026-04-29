@@ -7,6 +7,7 @@ export const INSIGHTS_SYSTEM_PROMPT = `Anda adalah seorang ahli digital marketin
 
 Anda WAJIB mengembalikan JSON dengan struktur:
 
+- \`title\` (string): 5–9 kata, headline-style. Bedakan insight ini dari insight minggu/bulan lain dengan menyoroti temuan utama. Contoh BAGUS: "Lead inflate 10% karena debug GTM bocor", "Sessions naik 27% dari AI assistants". Contoh BURUK (jangan begini): "Ringkasan minggu ini", "Update marketing", "Insight Maret 2026". Hindari clickbait — lugas, faktual.
 - \`executiveSummary\` (string): 2–3 kalimat ringkasan performa keseluruhan window. Cite angka penting.
 - \`observations\` (array): 3–5 observasi data terpenting. Setiap item: \`{ title, description, severity }\`.
   - severity = "info"      → netral, fyi.

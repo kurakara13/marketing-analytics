@@ -50,6 +50,11 @@ export const insights = pgTable(
     windowStart: date("window_start", { mode: "string" }).notNull(),
     windowEnd: date("window_end", { mode: "string" }).notNull(),
 
+    /** AI-generated short title (5–7 words) summarizing the headline
+     *  finding of this insight. Falls back to a generic
+     *  "Insight {window}" label in the UI when null (older rows
+     *  generated before self-titling existed). */
+    title: text("title"),
     executiveSummary: text("executive_summary").notNull(),
     observations: jsonb("observations")
       .notNull()

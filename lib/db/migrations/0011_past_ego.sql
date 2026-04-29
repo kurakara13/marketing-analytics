@@ -1,0 +1,1 @@
+ALTER TABLE "insight" ADD COLUMN "title" text;

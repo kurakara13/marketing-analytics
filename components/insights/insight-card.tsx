@@ -115,11 +115,14 @@ export function InsightCard({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <CardTitle className="flex items-center gap-2">
-              <Sparkles className="size-4" />
-              Insight {insight.windowStart} → {insight.windowEnd}
+              <Sparkles className="size-4 shrink-0" />
+              <span className="min-w-0">
+                {insight.title ?? `Insight ${insight.windowStart} → ${insight.windowEnd}`}
+              </span>
             </CardTitle>
             <CardDescription>
-              Dibuat {ago} · {insight.windowDays} hari · {insight.modelUsed}
+              {insight.windowStart} → {insight.windowEnd} · dibuat {ago} ·{" "}
+              {insight.windowDays} hari · {insight.modelUsed}
             </CardDescription>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">

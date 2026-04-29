@@ -63,11 +63,14 @@ export function MorningBrief({ insight }: { insight: Insight }) {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <CardTitle className="flex items-center gap-2 text-base">
-              <Sparkles className="size-4 text-primary" />
-              AI brief — {insight.windowStart} → {insight.windowEnd}
+              <Sparkles className="size-4 shrink-0 text-primary" />
+              <span className="min-w-0">
+                {insight.title ?? `AI brief — ${insight.windowStart} → ${insight.windowEnd}`}
+              </span>
             </CardTitle>
             <CardDescription className="text-xs">
-              Insight terakhir di-generate {ago} · {insight.modelUsed}
+              {insight.windowStart} → {insight.windowEnd} · {ago} ·{" "}
+              {insight.modelUsed}
             </CardDescription>
           </div>
           <Link
