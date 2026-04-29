@@ -6,10 +6,7 @@ import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 import { setInsightFeedbackAction } from "@/app/(dashboard)/insights/feedback-actions";
-import type {
-  FeedbackKind,
-  FeedbackRating,
-} from "@/lib/insight-feedback";
+import type { FeedbackKind, FeedbackRating } from "@/lib/feedback-keys";
 
 type Props = {
   insightId: string;

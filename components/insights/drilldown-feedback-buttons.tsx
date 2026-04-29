@@ -5,8 +5,10 @@ import { ThumbsDown, ThumbsUp } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
-import type { FeedbackRating } from "@/lib/insight-feedback";
-import type { DrilldownFeedbackKind } from "@/lib/drilldown-feedback";
+import type {
+  DrilldownFeedbackKind,
+  FeedbackRating,
+} from "@/lib/feedback-keys";
 import { setDrilldownFeedbackAction } from "@/app/(dashboard)/insights/feedback-actions";
 
 type Props = {

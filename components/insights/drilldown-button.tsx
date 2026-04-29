@@ -25,7 +25,7 @@ import type { InsightDrilldown } from "@/lib/db/schema";
 import {
   drilldownFeedbackKey,
   type DrilldownFeedbackMap,
-} from "@/lib/drilldown-feedback";
+} from "@/lib/feedback-keys";
 import { generateDrilldownAction } from "@/app/(dashboard)/insights/drilldown-actions";
 import { DrilldownFeedbackButtons } from "./drilldown-feedback-buttons";
 

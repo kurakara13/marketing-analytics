@@ -28,8 +28,8 @@ import type { InsightDrilldown } from "@/lib/db/schema";
 import {
   feedbackKey,
   type InsightFeedbackMap,
-} from "@/lib/insight-feedback";
-import type { DrilldownFeedbackMap } from "@/lib/drilldown-feedback";
+  type DrilldownFeedbackMap,
+} from "@/lib/feedback-keys";
 import { FeedbackButtons } from "./feedback-buttons";
 import { ShareButton } from "./share-button";
 import { DrilldownButton } from "./drilldown-button";

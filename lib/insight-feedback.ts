@@ -2,26 +2,22 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { insights, insightFeedback, type InsightFeedback } from "@/lib/db/schema";
-
-export type FeedbackKind = "observation" | "recommendation";
-export type FeedbackRating = -1 | 0 | 1;
-
-/**
- * Lightweight summary of all feedback the user has left on a single
- * insight. Returned by `getFeedbackForInsight` so the UI can render
- * the thumb state of every observation/recommendation in one query.
- *
- * Shape: a Map keyed by `${kind}:${itemIndex}` → rating. Missing keys
- * = no feedback yet (neutral). 0 = explicit "cleared" state.
- */
-export type InsightFeedbackMap = Map<string, FeedbackRating>;
-
-export function feedbackKey(args: {
-  kind: FeedbackKind;
-  itemIndex: number;
-}): string {
-  return `${args.kind}:${args.itemIndex}`;
-}
+// Re-export the pure client-safe types/keys so existing server-side
+// callsites (server components) still get them from this module.
+// Client components must import from "@/lib/feedback-keys" directly
+// to avoid pulling the db into the browser bundle.
+export {
+  feedbackKey,
+  type FeedbackKind,
+  type FeedbackRating,
+  type InsightFeedbackMap,
+} from "./feedback-keys";
+import type {
+  FeedbackKind,
+  FeedbackRating,
+  InsightFeedbackMap,
+} from "./feedback-keys";
+import { feedbackKey } from "./feedback-keys";
 
 export async function getFeedbackForInsight(args: {
   userId: string;

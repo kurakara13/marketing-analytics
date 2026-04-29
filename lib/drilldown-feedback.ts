@@ -2,17 +2,22 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { drilldownFeedback } from "@/lib/db/schema";
-import type { FeedbackRating } from "./insight-feedback";
-
-export type DrilldownFeedbackKind = "hypothesis" | "fix";
-export type DrilldownFeedbackMap = Map<string, FeedbackRating>;
-
-export function drilldownFeedbackKey(args: {
-  kind: DrilldownFeedbackKind;
-  itemIndex: number;
-}): string {
-  return `${args.kind}:${args.itemIndex}`;
-}
+// Re-export client-safe types/keys for backward compat with existing
+// server-side imports. Client components MUST import directly from
+// "@/lib/feedback-keys" to avoid pulling postgres into the browser
+// bundle.
+export {
+  drilldownFeedbackKey,
+  type DrilldownFeedbackKind,
+  type DrilldownFeedbackMap,
+  type FeedbackRating,
+} from "./feedback-keys";
+import {
+  drilldownFeedbackKey,
+  type DrilldownFeedbackKind,
+  type DrilldownFeedbackMap,
+  type FeedbackRating,
+} from "./feedback-keys";
 
 export async function getFeedbackForDrilldown(args: {
   userId: string;

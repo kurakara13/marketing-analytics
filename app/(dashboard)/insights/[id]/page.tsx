@@ -66,7 +66,7 @@ export default async function InsightDetailPage({
   // One IN-list batch for all drilldown feedback.
   const drilldownFeedbackById = await getFeedbackForDrilldowns({
     userId: session.user.id,
-    drilldownIds: drilldownRows.map((d) => d.id),
+    drilldownIds: drilldownRows.map((d: InsightDrilldown) => d.id),
   });
 
   return (
