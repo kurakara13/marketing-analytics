@@ -12,6 +12,10 @@ import { db } from "@/lib/db";
 import { insightDrilldowns, type InsightDrilldown } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { SuggestedPeriods } from "@/components/insights/suggested-periods";
+import {
+  InsightsFilter,
+  buildInsightSearchText,
+} from "@/components/insights/insights-filter";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -104,7 +108,12 @@ export default async function InsightsPage() {
       {insights.length === 0 ? (
         <InsightsEmptyState userId={userId} />
       ) : (
-        <div className="grid gap-4">
+        <InsightsFilter
+          items={insights.map((i) => ({
+            id: i.id,
+            searchText: buildInsightSearchText(i),
+          }))}
+        >
           {insights.map((insight, idx) => {
             // The list is sorted by createdAt desc, so the next item in
             // the array is the immediately-previous insight in time.
@@ -124,7 +133,7 @@ export default async function InsightsPage() {
               />
             );
           })}
-        </div>
+        </InsightsFilter>
       )}
     </div>
   );
