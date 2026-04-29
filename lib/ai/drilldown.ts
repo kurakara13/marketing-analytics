@@ -11,6 +11,8 @@ import {
   type InsightDrilldown,
 } from "@/lib/db/schema";
 import { fetchReportData } from "@/lib/reports/fetch-report-data";
+import { getUserDrilldownFeedbackSummary } from "@/lib/drilldown-feedback";
+import type { DrilldownFeedbackSummary } from "@/lib/drilldown-feedback";
 import { DAILY_DRILLDOWN_QUOTA, findInsightByIdForUser } from "./insights";
 import { detectAttributionFlags } from "./attribution-flags";
 
@@ -191,6 +193,7 @@ export async function generateDrilldown(args: {
     anchorDate: insight.windowEnd,
   });
   const flags = detectAttributionFlags(reportData);
+  const feedbackSummary = await getUserDrilldownFeedbackSummary(userId);
 
   const userPrompt = buildDrilldownUserPrompt({
     insight,
@@ -201,6 +204,7 @@ export async function generateDrilldown(args: {
         (f) => `- [${f.severity.toUpperCase()}] ${f.label} — ${f.description}`,
       )
       .join("\n"),
+    feedbackSummary,
   });
 
   if (!process.env.OPENAI_API_KEY) {
@@ -296,13 +300,41 @@ export async function findDrilldown(args: {
 }
 
 // ─── Prompt builder ───────────────────────────────────────────────────
+function buildFeedbackBlock(summary: DrilldownFeedbackSummary): string {
+  if (summary.liked.length === 0 && summary.disliked.length === 0) return "";
+
+  const fmt = (e: { kind: string; title: string }) =>
+    `- [${e.kind === "hypothesis" ? "hyp" : "fix"}] ${e.title}`;
+
+  const blocks: string[] = ["## Feedback dari user pada drill-down sebelumnya"];
+
+  if (summary.liked.length > 0) {
+    blocks.push(
+      `\n### Yang user anggap berguna (👍, ${summary.liked.length}):`,
+      summary.liked.map(fmt).join("\n"),
+    );
+  }
+  if (summary.disliked.length > 0) {
+    blocks.push(
+      `\n### Yang user tandai kurang relevan (👎, ${summary.disliked.length}):`,
+      summary.disliked.map(fmt).join("\n"),
+    );
+  }
+  blocks.push(
+    "\nGunakan sinyal ini ketika menyusun hypotheses + fixes — condongkan ke angle yang dianggap berguna, hindari pattern yang ditandai kurang relevan. Jangan duplikasi kata-katanya — angle yang dicontoh.",
+  );
+  return blocks.join("\n") + "\n\n";
+}
+
 function buildDrilldownUserPrompt(args: {
   insight: Insight;
   observation: { title: string; description: string; severity: string };
   reportData: import("@/lib/reports/fetch-report-data").ReportData;
   flagsBlock: string;
+  feedbackSummary: DrilldownFeedbackSummary;
 }): string {
-  const { insight, observation, reportData, flagsBlock } = args;
+  const { insight, observation, reportData, flagsBlock, feedbackSummary } =
+    args;
 
   const adsCampaigns = reportData.campaigns
     .filter((c) => c.source === "google_ads")
@@ -327,7 +359,7 @@ function buildDrilldownUserPrompt(args: {
     )
     .join("\n");
 
-  return `## Focus observation (drill down ke sini)
+  return `${buildFeedbackBlock(feedbackSummary)}## Focus observation (drill down ke sini)
 
 **Severity**: ${observation.severity}
 **Title**: ${observation.title}
