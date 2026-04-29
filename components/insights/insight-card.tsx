@@ -35,26 +35,38 @@ import { ShareButton } from "./share-button";
 import { DrilldownButton } from "./drilldown-button";
 import { InsightActions } from "./insight-actions";
 
+// Per-severity styling for observation cards. We use a left-edge
+// accent bar (border-l-4) + subtle tinted background instead of a
+// fully-saturated bg block — quieter visual, still strong scannable
+// signal at the edge.
 const SEVERITY_STYLES: Record<
   InsightObservation["severity"],
-  { icon: typeof Info; className: string; label: string }
+  {
+    icon: typeof Info;
+    /** Outer card wrapper (border-l + bg). */
+    card: string;
+    /** Severity pill (icon + label). */
+    pill: string;
+    /** Pill label. */
+    label: string;
+  }
 > = {
   info: {
     icon: Info,
-    className:
-      "text-sky-700 dark:text-sky-300 bg-sky-100 dark:bg-sky-950 border-sky-200 dark:border-sky-900",
+    card: "border-l-sky-400 bg-sky-50/40 dark:border-l-sky-700 dark:bg-sky-950/30",
+    pill: "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300",
     label: "Info",
   },
   warning: {
     icon: AlertTriangle,
-    className:
-      "text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-950 border-amber-200 dark:border-amber-900",
-    label: "Warning",
+    card: "border-l-amber-400 bg-amber-50/40 dark:border-l-amber-700 dark:bg-amber-950/30",
+    pill: "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+    label: "Watch",
   },
   alert: {
     icon: AlertCircle,
-    className:
-      "text-rose-700 dark:text-rose-300 bg-rose-100 dark:bg-rose-950 border-rose-200 dark:border-rose-900",
+    card: "border-l-rose-500 bg-rose-50/40 dark:border-l-rose-700 dark:bg-rose-950/30",
+    pill: "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
     label: "Alert",
   },
 };
@@ -202,13 +214,23 @@ export function InsightCard({
                     <li
                       key={i}
                       className={cn(
-                        "rounded-md border p-3 text-sm",
-                        style.className,
+                        "rounded-md border border-border/60 border-l-4 p-3 text-sm",
+                        style.card,
                       )}
                     >
-                      <div className="mb-1 flex items-center gap-2 font-medium">
-                        <Icon className="size-4 shrink-0" />
-                        <span className="min-w-0 flex-1">{o.title}</span>
+                      <div className="mb-1.5 flex items-center gap-2">
+                        <span
+                          className={cn(
+                            "inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                            style.pill,
+                          )}
+                        >
+                          <Icon className="size-3" />
+                          {style.label}
+                        </span>
+                        <span className="text-foreground min-w-0 flex-1 font-medium">
+                          {o.title}
+                        </span>
                         {feedback ? (
                           <FeedbackButtons
                             insightId={insight.id}
@@ -218,7 +240,7 @@ export function InsightCard({
                           />
                         ) : null}
                       </div>
-                      <p className="text-foreground/90 text-sm leading-relaxed">
+                      <p className="text-muted-foreground text-sm leading-relaxed">
                         {o.description}
                       </p>
                       {isInvestigable ? (
@@ -260,18 +282,20 @@ export function InsightCard({
                   return (
                     <li
                       key={i}
-                      className="bg-muted/30 rounded-md border p-3 text-sm"
+                      className="bg-muted/30 rounded-md border border-border/60 p-3 text-sm"
                     >
-                      <div className="mb-1 flex items-center gap-2 font-medium">
+                      <div className="mb-1.5 flex items-center gap-2">
                         <span
                           className={cn(
-                            "rounded-full border px-2 py-0.5 text-xs font-medium",
+                            "inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
                             style.className,
                           )}
                         >
                           {style.label}
                         </span>
-                        <span className="min-w-0 flex-1">{r.title}</span>
+                        <span className="text-foreground min-w-0 flex-1 font-medium">
+                          {r.title}
+                        </span>
                         {feedback ? (
                           <FeedbackButtons
                             insightId={insight.id}
@@ -281,7 +305,7 @@ export function InsightCard({
                           />
                         ) : null}
                       </div>
-                      <p className="text-foreground/90 text-sm leading-relaxed">
+                      <p className="text-muted-foreground text-sm leading-relaxed">
                         {r.description}
                       </p>
                     </li>
