@@ -12,10 +12,8 @@ import { db } from "@/lib/db";
 import { insightDrilldowns, type InsightDrilldown } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { SuggestedPeriods } from "@/components/insights/suggested-periods";
-import {
-  InsightsFilter,
-  buildInsightSearchText,
-} from "@/components/insights/insights-filter";
+import { InsightsFilter } from "@/components/insights/insights-filter";
+import { buildInsightSearchText } from "@/lib/insight-search";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Card,

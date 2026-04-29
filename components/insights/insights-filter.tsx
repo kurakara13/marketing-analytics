@@ -92,33 +92,5 @@ export function InsightsFilter({ items, children }: Props) {
   );
 }
 
-// Helper to compose searchable text from a full insight on the
-// server side. Concatenates title, summary, and all observation +
-// recommendation titles + descriptions so the search hits substrings
-// in any of those fields. Lowercase + collapsed whitespace for
-// predictable matching.
-export function buildInsightSearchText(insight: {
-  title: string | null;
-  executiveSummary: string;
-  windowStart: string;
-  windowEnd: string;
-  observations: Array<{ title: string; description: string }>;
-  recommendations: Array<{ title: string; description: string }>;
-}): string {
-  const parts: string[] = [];
-  if (insight.title) parts.push(insight.title);
-  parts.push(insight.executiveSummary);
-  parts.push(`${insight.windowStart} ${insight.windowEnd}`);
-  for (const o of insight.observations) {
-    parts.push(o.title);
-    parts.push(o.description);
-  }
-  for (const r of insight.recommendations) {
-    parts.push(r.title);
-    parts.push(r.description);
-  }
-  return parts.join(" ").replace(/\s+/g, " ");
-}
-
 // Eslint: unused import guard
 void cn;
