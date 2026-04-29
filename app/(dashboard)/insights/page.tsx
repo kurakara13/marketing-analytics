@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/card";
 import { GenerateInsightsButton } from "@/components/insights/generate-insights-button";
 import { InsightCard } from "@/components/insights/insight-card";
+import { InsightCardCompact } from "@/components/insights/insight-card-compact";
 import { cn } from "@/lib/utils";
 
 export default async function InsightsPage() {
@@ -117,22 +118,71 @@ export default async function InsightsPage() {
             // the array is the immediately-previous insight in time.
             // Pass its id so the card can link straight to /compare.
             const previousInsightId = insights[idx + 1]?.id ?? null;
+
+            // Latest insight (idx=0) renders as the full hero card —
+            // it's what the user usually wants to read right now.
+            // Older insights collapse to a compact summary so the
+            // page stays scannable when 20+ insights accumulate.
+            if (idx === 0) {
+              return (
+                <div key={insight.id} className="flex flex-col gap-2">
+                  <SectionLabel
+                    eyebrow="Insight terbaru"
+                    helper="Hasil generate paling baru — buka detail untuk drill-down per observation"
+                  />
+                  <InsightCard
+                    insight={insight}
+                    previousInsightId={previousInsightId}
+                    feedback={feedbackByInsight.get(insight.id) ?? new Map()}
+                    drilldownsByIndex={
+                      drilldownsByInsight.get(insight.id) ?? new Map()
+                    }
+                    drilldownFeedbackById={drilldownFeedbackById}
+                    linkTitle
+                  />
+                </div>
+              );
+            }
+
+            // Subsequent items: compact card. The first compact item
+            // gets the "Riwayat" eyebrow above it.
+            const isFirstHistorical = idx === 1;
             return (
-              <InsightCard
-                key={insight.id}
-                insight={insight}
-                previousInsightId={previousInsightId}
-                feedback={feedbackByInsight.get(insight.id) ?? new Map()}
-                drilldownsByIndex={
-                  drilldownsByInsight.get(insight.id) ?? new Map()
-                }
-                drilldownFeedbackById={drilldownFeedbackById}
-                linkTitle
-              />
+              <div key={insight.id} className="flex flex-col gap-2">
+                {isFirstHistorical ? (
+                  <SectionLabel
+                    eyebrow="Riwayat"
+                    helper={`${insights.length - 1} insight lebih lama — klik untuk buka detail`}
+                  />
+                ) : null}
+                <InsightCardCompact
+                  insight={insight}
+                  previousInsightId={previousInsightId}
+                />
+              </div>
             );
           })}
         </InsightsFilter>
       )}
+    </div>
+  );
+}
+
+function SectionLabel({
+  eyebrow,
+  helper,
+}: {
+  eyebrow: string;
+  helper?: string;
+}) {
+  return (
+    <div className="flex items-baseline gap-2 mt-2">
+      <span className="text-foreground text-xs font-semibold uppercase tracking-[0.08em]">
+        {eyebrow}
+      </span>
+      {helper ? (
+        <span className="text-muted-foreground text-[11px]">· {helper}</span>
+      ) : null}
     </div>
   );
 }
