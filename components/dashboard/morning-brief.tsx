@@ -20,6 +20,13 @@ import type { Insight } from "@/lib/db/schema";
 // pay attention to today" without forcing the user into /insights
 // for every check-in.
 //
+// Scope note: dashboard KPI cards reflect the user's selected window
+// (default 30 days), but this insight is always for its own pinned
+// window (typically 7 days, the period the AI was generated for). To
+// avoid the apparent mismatch ("Sessions +28%" in KPI vs "+3%" in
+// summary), we surface the insight window prominently in the header
+// + the meta line — no hidden assumption of "same period as KPIs".
+//
 // Hidden when there's no insight yet (the dashboard's onboarding
 // banner already covers that step).
 
@@ -71,9 +78,12 @@ export function MorningBrief({ insight }: { insight: Insight }) {
                 {insight.title ?? `AI brief — ${insight.windowStart} → ${insight.windowEnd}`}
               </Link>
             </CardTitle>
-            <CardDescription className="text-xs">
-              {insight.windowStart} → {insight.windowEnd} · {ago} ·{" "}
-              {insight.modelUsed}
+            <CardDescription className="flex flex-wrap items-center gap-1.5 text-xs">
+              <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
+                {insight.windowDays} hari · {insight.windowStart} →{" "}
+                {insight.windowEnd}
+              </span>
+              <span>· dibuat {ago} · {insight.modelUsed}</span>
             </CardDescription>
           </div>
           <Link

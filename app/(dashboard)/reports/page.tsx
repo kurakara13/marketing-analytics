@@ -1,13 +1,20 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { desc, eq } from "drizzle-orm";
-import { Plus, FileText } from "lucide-react";
+import {
+  Plus,
+  FileText,
+  LayoutTemplate,
+  Database,
+  Sparkles,
+} from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { id as idLocale } from "date-fns/locale";
 
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { reportTemplates } from "@/lib/db/schema";
+import { listConnectionsForUser } from "@/lib/connections";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -24,17 +31,24 @@ export default async function ReportsPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const reports = await db
-    .select({
-      id: reportTemplates.id,
-      name: reportTemplates.name,
-      description: reportTemplates.description,
-      updatedAt: reportTemplates.updatedAt,
-      definition: reportTemplates.definition,
-    })
-    .from(reportTemplates)
-    .where(eq(reportTemplates.userId, session.user.id))
-    .orderBy(desc(reportTemplates.updatedAt));
+  const userId = session.user.id;
+  const [reports, connections] = await Promise.all([
+    db
+      .select({
+        id: reportTemplates.id,
+        name: reportTemplates.name,
+        description: reportTemplates.description,
+        updatedAt: reportTemplates.updatedAt,
+        definition: reportTemplates.definition,
+      })
+      .from(reportTemplates)
+      .where(eq(reportTemplates.userId, userId))
+      .orderBy(desc(reportTemplates.updatedAt)),
+    listConnectionsForUser(userId),
+  ]);
+  const hasConnection = connections.some(
+    (c) => !c.externalAccountId.startsWith("_pending_"),
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -56,16 +70,7 @@ export default async function ReportsPage() {
       </div>
 
       {reports.length === 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Belum ada report</CardTitle>
-            <CardDescription>
-              Klik &quot;New blank report&quot; untuk mulai. Builder akan
-              terbuka dengan 1 slide kosong — tambah widget (text, KPI card,
-              line chart) lalu konfigurasi data source.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <ReportsEmptyState hasConnection={hasConnection} />
       ) : (
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {reports.map((r) => {
@@ -128,6 +133,111 @@ export default async function ReportsPage() {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Empty state ────────────────────────────────────────────────────
+//
+// Branches on whether the user has a data source connected:
+//   - No connection → guide them to /data-sources first; building a
+//     report without data is a dead end (KPI/chart widgets render "—").
+//   - Has connection → richer empty state explaining the report-builder
+//     flow + visual cards listing the kinds of widgets available, then
+//     a primary CTA for "New blank report".
+function ReportsEmptyState({ hasConnection }: { hasConnection: boolean }) {
+  if (!hasConnection) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Database className="size-4" />
+            Connect data source dulu
+          </CardTitle>
+          <CardDescription>
+            Report Anda akan terasa kosong tanpa data — KPI, chart, dan
+            tabel butuh angka real dari Google Analytics atau Google Ads.
+            Hubungkan minimal satu source dulu, lalu kembali ke sini.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Link
+            href="/data-sources"
+            className={cn(buttonVariants({ variant: "default" }))}
+          >
+            <Database className="size-4" />
+            Buka Data Sources
+          </Link>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="border-dashed">
+      <CardHeader>
+        <div className="flex items-center gap-3">
+          <div className="bg-primary/10 text-primary flex size-10 shrink-0 items-center justify-center rounded-lg">
+            <LayoutTemplate className="size-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <CardTitle>Belum ada report — yuk bikin yang pertama</CardTitle>
+            <CardDescription>
+              Builder akan terbuka dengan 1 slide kosong. Tambah widget dari
+              palette di kanan, drag/resize di canvas, lalu Generate jadi
+              .pptx kapan saja.
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <EmptyStateHint
+            icon={LayoutTemplate}
+            title="Layout"
+            description="Text, image, shape, divider — bahan visual untuk frame slide."
+          />
+          <EmptyStateHint
+            icon={Database}
+            title="Data widgets"
+            description="KPI card, line/bar chart, table — auto-resolve metric dari data source."
+          />
+          <EmptyStateHint
+            icon={Sparkles}
+            title="AI Insight"
+            description="Drop AI Insight widget — Generate .pptx akan auto-fill commentary."
+          />
+        </div>
+        <form action={createTemplateAction}>
+          <input type="hidden" name="name" value="Untitled report" />
+          <Button type="submit" className="w-full sm:w-auto">
+            <Plus className="size-4" />
+            New blank report
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+function EmptyStateHint({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon: typeof FileText;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="flex flex-col gap-1 rounded-md border border-border/60 bg-muted/30 p-3">
+      <div className="text-foreground inline-flex items-center gap-1.5 text-xs font-semibold">
+        <Icon className="size-3.5" />
+        {title}
+      </div>
+      <p className="text-muted-foreground text-[11px] leading-snug">
+        {description}
+      </p>
     </div>
   );
 }

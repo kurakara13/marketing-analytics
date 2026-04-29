@@ -1,16 +1,19 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
 
 import { auth } from "@/lib/auth";
-import { findInsightByIdForUser } from "@/lib/ai/insights";
+import {
+  findInsightByIdForUser,
+  findNextInsightFor,
+  findPreviousInsightFor,
+} from "@/lib/ai/insights";
 import { getFeedbackForInsight } from "@/lib/insight-feedback";
 import { getFeedbackForDrilldowns } from "@/lib/drilldown-feedback";
 import { findDrilldown } from "@/lib/ai/drilldown";
 import { db } from "@/lib/db";
 import { insightDrilldowns, type InsightDrilldown } from "@/lib/db/schema";
-import { and, eq, lt } from "drizzle-orm";
-import { insights as insightsTable } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 import { buttonVariants } from "@/components/ui/button";
 import { InsightCard } from "@/components/insights/insight-card";
 import { cn } from "@/lib/utils";
@@ -37,26 +40,28 @@ export default async function InsightDetailPage({
   });
   if (!insight) notFound();
 
-  // Sibling lookups in parallel: feedback for this insight, the
-  // immediately-previous insight (for the Bandingkan link), and
-  // cached drilldowns for all observations.
-  const [feedback, drilldownRows, previousInsight] = await Promise.all([
-    getFeedbackForInsight({
-      userId: session.user.id,
-      insightId: insight.id,
-    }),
-    db
-      .select()
-      .from(insightDrilldowns)
-      .where(eq(insightDrilldowns.insightId, insight.id)),
-    db.query.insights.findFirst({
-      where: and(
-        eq(insightsTable.userId, session.user.id),
-        lt(insightsTable.createdAt, insight.createdAt),
-      ),
-      orderBy: (i, { desc }) => [desc(i.createdAt)],
-    }),
-  ]);
+  // Sibling lookups in parallel: feedback for this insight, prev +
+  // next insight (for nav + Bandingkan link), and cached drilldowns
+  // for all observations.
+  const [feedback, drilldownRows, previousInsight, nextInsight] =
+    await Promise.all([
+      getFeedbackForInsight({
+        userId: session.user.id,
+        insightId: insight.id,
+      }),
+      db
+        .select()
+        .from(insightDrilldowns)
+        .where(eq(insightDrilldowns.insightId, insight.id)),
+      findPreviousInsightFor({
+        userId: session.user.id,
+        insightId: insight.id,
+      }),
+      findNextInsightFor({
+        userId: session.user.id,
+        insightId: insight.id,
+      }),
+    ]);
 
   const drilldownsByIndex = new Map<number, InsightDrilldown>();
   for (const d of drilldownRows) {
@@ -71,16 +76,50 @@ export default async function InsightDetailPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <Link
-        href="/insights"
-        className={cn(
-          buttonVariants({ variant: "ghost", size: "sm" }),
-          "self-start -ml-3",
-        )}
-      >
-        <ArrowLeft className="size-4" />
-        Semua insights
-      </Link>
+      <div className="flex items-center justify-between gap-2">
+        <Link
+          href="/insights"
+          className={cn(
+            buttonVariants({ variant: "ghost", size: "sm" }),
+            "-ml-3",
+          )}
+        >
+          <ArrowLeft className="size-4" />
+          Semua insights
+        </Link>
+        <div className="flex items-center gap-1">
+          {previousInsight ? (
+            <Link
+              href={`/insights/${previousInsight.id}`}
+              className={cn(
+                buttonVariants({ variant: "outline", size: "sm" }),
+              )}
+              title={
+                previousInsight.title ??
+                `${previousInsight.windowStart} → ${previousInsight.windowEnd}`
+              }
+            >
+              <ChevronLeft className="size-3.5" />
+              <span className="hidden sm:inline">Lebih lama</span>
+            </Link>
+          ) : null}
+          {nextInsight ? (
+            <Link
+              href={`/insights/${nextInsight.id}`}
+              className={cn(
+                buttonVariants({ variant: "outline", size: "sm" }),
+              )}
+              title={
+                nextInsight.title ??
+                `${nextInsight.windowStart} → ${nextInsight.windowEnd}`
+              }
+            >
+              <span className="hidden sm:inline">Lebih baru</span>
+              <ChevronRight className="size-3.5" />
+            </Link>
+          ) : null}
+        </div>
+      </div>
 
       <InsightCard
         insight={insight}

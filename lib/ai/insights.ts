@@ -744,3 +744,29 @@ export async function findPreviousInsightFor(args: {
   });
   return row ?? null;
 }
+
+/**
+ * Find the immediately-newer insight for the user. Used together with
+ * findPreviousInsightFor to render prev/next navigation on the
+ * insight permalink page.
+ */
+export async function findNextInsightFor(args: {
+  userId: string;
+  insightId: string;
+}): Promise<Insight | null> {
+  const current = await findInsightByIdForUser({
+    userId: args.userId,
+    insightId: args.insightId,
+  });
+  if (!current) return null;
+
+  const row = await db.query.insights.findFirst({
+    where: (insight, { and, eq, gt }) =>
+      and(
+        eq(insight.userId, args.userId),
+        gt(insight.createdAt, current.createdAt),
+      ),
+    orderBy: (insight, { asc }) => [asc(insight.createdAt)],
+  });
+  return row ?? null;
+}

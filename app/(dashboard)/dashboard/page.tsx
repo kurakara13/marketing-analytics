@@ -153,6 +153,15 @@ export default async function DashboardPage({
 
       {latestInsight ? <MorningBrief insight={latestInsight} /> : null}
 
+      <div className="flex items-center gap-2 -mb-2">
+        <h2 className="text-foreground text-sm font-semibold tracking-tight">
+          KPI {windowDays} hari
+        </h2>
+        <span className="text-muted-foreground text-xs">
+          · perbandingan vs {windowDays} hari sebelumnya
+        </span>
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
           label="Sessions"

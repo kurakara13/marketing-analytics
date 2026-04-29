@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { and, desc, eq, gte, inArray } from "drizzle-orm";
 
 import { db } from "@/lib/db";
@@ -51,7 +52,26 @@ function formatDate(iso: string): string {
   return `${d.getUTCDate()} ${month}`;
 }
 
-export async function detectInterestingPeriods(
+// Detection is expensive (90 days × all metrics × all connections,
+// loaded into memory then run through rolling stats per metric). We
+// memoize per-user for a short TTL — daily anomaly windows don't
+// change minute-to-minute, and the /insights page renders this on
+// every load. Tagged so callers can revalidate after a fresh sync if
+// needed (revalidateTag("period-detection") would force re-compute).
+const PERIOD_DETECTION_TTL_SECONDS = 60 * 30; // 30 min
+
+export const detectInterestingPeriods = unstable_cache(
+  async (userId: string): Promise<InterestingPeriod[]> => {
+    return await detectInterestingPeriodsImpl(userId);
+  },
+  ["period-detection-v1"],
+  {
+    revalidate: PERIOD_DETECTION_TTL_SECONDS,
+    tags: ["period-detection"],
+  },
+);
+
+async function detectInterestingPeriodsImpl(
   userId: string,
 ): Promise<InterestingPeriod[]> {
   const since = isoDateNDaysAgo(LOOKBACK_DAYS);
