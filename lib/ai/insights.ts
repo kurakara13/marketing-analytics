@@ -651,6 +651,42 @@ export async function revokeInsightSharing(args: {
     );
 }
 
+/**
+ * Delete an insight, scoped to its owner. Cascades to feedback +
+ * drilldown rows via FK ON DELETE CASCADE. Returns whether the row
+ * actually existed for the user.
+ */
+export async function deleteInsightForUser(args: {
+  userId: string;
+  insightId: string;
+}): Promise<boolean> {
+  const result = await db
+    .delete(insights)
+    .where(
+      and(eq(insights.id, args.insightId), eq(insights.userId, args.userId)),
+    )
+    .returning({ id: insights.id });
+  return result.length > 0;
+}
+
+/**
+ * Update the user-facing title of an insight. Empty string → revert
+ * to AI-generated title (we set it to null so the UI falls back to
+ * the original heuristic).
+ */
+export async function renameInsightForUser(args: {
+  userId: string;
+  insightId: string;
+  title: string | null;
+}): Promise<void> {
+  await db
+    .update(insights)
+    .set({ title: args.title })
+    .where(
+      and(eq(insights.id, args.insightId), eq(insights.userId, args.userId)),
+    );
+}
+
 export async function listInsightsForUser(userId: string): Promise<Insight[]> {
   const rows = await db.query.insights.findMany({
     where: (insight, { eq }) => eq(insight.userId, userId),

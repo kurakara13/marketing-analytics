@@ -32,6 +32,7 @@ import {
 import { FeedbackButtons } from "./feedback-buttons";
 import { ShareButton } from "./share-button";
 import { DrilldownButton } from "./drilldown-button";
+import { InsightActions } from "./insight-actions";
 
 const SEVERITY_STYLES: Record<
   InsightObservation["severity"],
@@ -142,6 +143,12 @@ export function InsightCard({
                 <ArrowLeftRight className="size-3.5" />
                 Bandingkan
               </Link>
+            ) : null}
+            {showShare ? (
+              <InsightActions
+                insightId={insight.id}
+                currentTitle={insight.title}
+              />
             ) : null}
           </div>
         </div>
