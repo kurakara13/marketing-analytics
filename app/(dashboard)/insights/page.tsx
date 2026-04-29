@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Sparkles } from "lucide-react";
+import { Database, Sparkles } from "lucide-react";
 
 import { auth } from "@/lib/auth";
 import { getUsageStatus, listInsightsForUser } from "@/lib/ai/insights";
@@ -24,6 +24,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { PageHeader } from "@/components/layout/page-header";
+import { EmptyState } from "@/components/layout/empty-state";
 import { GenerateInsightsButton } from "@/components/insights/generate-insights-button";
 import { InsightCard } from "@/components/insights/insight-card";
 import { InsightCardCompact } from "@/components/insights/insight-card-compact";
@@ -202,42 +203,50 @@ async function InsightsEmptyState({ userId }: { userId: string }) {
 
   if (!hasConnection) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Belum ada koneksi data source</CardTitle>
-          <CardDescription>
-            Hubungkan Google Analytics 4 atau Google Ads dulu — AI butuh data
-            untuk menganalisis. Setelah connect & sync, kembali ke sini dan
-            klik <strong>Generate insight</strong>.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <EmptyState
+        icon={Database}
+        title="Belum ada koneksi data source"
+        description={
+          <>
+            Hubungkan Google Analytics 4 atau Google Ads dulu — AI butuh
+            data untuk menganalisis. Setelah connect & sync, kembali ke
+            sini dan klik <strong>Generate insight</strong>.
+          </>
+        }
+        action={
           <Link
             href="/data-sources"
             className={cn(buttonVariants({ variant: "default" }))}
           >
             Connect data source
           </Link>
-        </CardContent>
-      </Card>
+        }
+      />
     );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Belum ada insight — yuk generate yang pertama</CardTitle>
-        <CardDescription>
-          Anda sudah punya {realConnections.length} koneksi aktif. Klik tombol{" "}
-          <strong>Generate insight</strong> di kanan atas — AI akan analyze
-          data 7 hari terakhir Anda dan keluarkan ringkasan, observation, dan
-          rekomendasi. Butuh ~10–30 detik. Pertimbangkan setting{" "}
+    <EmptyState
+      icon={Sparkles}
+      tone="primary"
+      title="Yuk generate insight pertama"
+      description={
+        <>
+          Anda sudah punya {realConnections.length} koneksi aktif. Klik
+          tombol <strong>Generate insight</strong> di kanan atas — AI
+          analyze data 7 hari terakhir, keluarkan ringkasan + observation
+          + rekomendasi. Butuh ~10–30 detik.
+        </>
+      }
+      footer={
+        <>
+          Tip: set{" "}
           <Link href="/settings" className="underline underline-offset-4">
             konteks bisnis
           </Link>{" "}
           dulu agar insight lebih relevan.
-        </CardDescription>
-      </CardHeader>
-    </Card>
+        </>
+      }
+    />
   );
 }

@@ -16,6 +16,7 @@ import { db } from "@/lib/db";
 import { reportTemplates } from "@/lib/db/schema";
 import { listConnectionsForUser } from "@/lib/connections";
 import { PageHeader } from "@/components/layout/page-header";
+import { EmptyState } from "@/components/layout/empty-state";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -151,19 +152,17 @@ export default async function ReportsPage() {
 function ReportsEmptyState({ hasConnection }: { hasConnection: boolean }) {
   if (!hasConnection) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Database className="size-4" />
-            Connect data source dulu
-          </CardTitle>
-          <CardDescription>
+      <EmptyState
+        icon={Database}
+        title="Connect data source dulu"
+        description={
+          <>
             Report Anda akan terasa kosong tanpa data — KPI, chart, dan
             tabel butuh angka real dari Google Analytics atau Google Ads.
             Hubungkan minimal satu source dulu, lalu kembali ke sini.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+          </>
+        }
+        action={
           <Link
             href="/data-sources"
             className={cn(buttonVariants({ variant: "default" }))}
@@ -171,55 +170,52 @@ function ReportsEmptyState({ hasConnection }: { hasConnection: boolean }) {
             <Database className="size-4" />
             Buka Data Sources
           </Link>
-        </CardContent>
-      </Card>
+        }
+      />
     );
   }
 
   return (
-    <Card className="border-dashed">
-      <CardHeader>
-        <div className="flex items-center gap-3">
-          <div className="bg-primary/10 text-primary flex size-10 shrink-0 items-center justify-center rounded-lg">
-            <LayoutTemplate className="size-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <CardTitle>Belum ada report — yuk bikin yang pertama</CardTitle>
-            <CardDescription>
-              Builder akan terbuka dengan 1 slide kosong. Tambah widget dari
-              palette di kanan, drag/resize di canvas, lalu Generate jadi
-              .pptx kapan saja.
-            </CardDescription>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <EmptyStateHint
-            icon={LayoutTemplate}
-            title="Layout"
-            description="Text, image, shape, divider — bahan visual untuk frame slide."
-          />
-          <EmptyStateHint
-            icon={Database}
-            title="Data widgets"
-            description="KPI card, line/bar chart, table — auto-resolve metric dari data source."
-          />
-          <EmptyStateHint
-            icon={Sparkles}
-            title="AI Insight"
-            description="Drop AI Insight widget — Generate .pptx akan auto-fill commentary."
-          />
-        </div>
-        <form action={createTemplateAction}>
-          <input type="hidden" name="name" value="Untitled report" />
-          <Button type="submit" className="w-full sm:w-auto">
-            <Plus className="size-4" />
-            New blank report
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+    <div className="flex flex-col gap-4">
+      <EmptyState
+        icon={LayoutTemplate}
+        tone="primary"
+        title="Belum ada report — yuk bikin yang pertama"
+        description={
+          <>
+            Builder akan terbuka dengan 1 slide kosong. Tambah widget dari
+            palette di kanan, drag/resize di canvas, lalu Generate jadi
+            .pptx kapan saja.
+          </>
+        }
+        action={
+          <form action={createTemplateAction}>
+            <input type="hidden" name="name" value="Untitled report" />
+            <Button type="submit">
+              <Plus className="size-4" />
+              New blank report
+            </Button>
+          </form>
+        }
+      />
+      <div className="grid gap-3 sm:grid-cols-3">
+        <EmptyStateHint
+          icon={LayoutTemplate}
+          title="Layout"
+          description="Text, image, shape, divider — bahan visual untuk frame slide."
+        />
+        <EmptyStateHint
+          icon={Database}
+          title="Data widgets"
+          description="KPI card, line/bar chart, table — auto-resolve metric dari data source."
+        />
+        <EmptyStateHint
+          icon={Sparkles}
+          title="AI Insight"
+          description="Drop AI Insight widget — Generate .pptx akan auto-fill commentary."
+        />
+      </div>
+    </div>
   );
 }
 
