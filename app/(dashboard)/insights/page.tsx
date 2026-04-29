@@ -4,8 +4,8 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { getUsageStatus, listInsightsForUser } from "@/lib/ai/insights";
 import { getDrilldownUsage } from "@/lib/ai/drilldown";
-import { getFeedbackForInsight } from "@/lib/insight-feedback";
-import { getFeedbackForDrilldown } from "@/lib/drilldown-feedback";
+import { getFeedbackForInsights } from "@/lib/insight-feedback";
+import { getFeedbackForDrilldowns } from "@/lib/drilldown-feedback";
 import { listConnectionsForUser } from "@/lib/connections";
 import { detectInterestingPeriods } from "@/lib/period-detection";
 import { db } from "@/lib/db";
@@ -36,14 +36,11 @@ export default async function InsightsPage() {
     detectInterestingPeriods(userId),
   ]);
 
-  // Pull all feedback rows in parallel — one query per insight is fine
-  // for the 20-row limit. Switch to a batched IN-list query if list
-  // grows beyond ~50.
-  const feedbackPerInsight = await Promise.all(
-    insights.map((i) =>
-      getFeedbackForInsight({ userId, insightId: i.id }),
-    ),
-  );
+  // One IN-list query for ALL insights' feedback (no N+1).
+  const feedbackByInsight = await getFeedbackForInsights({
+    userId,
+    insightIds: insights.map((i) => i.id),
+  });
 
   // Single batched query for all cached drilldowns across the
   // displayed insights, then group by insightId for per-card lookup.
@@ -66,18 +63,11 @@ export default async function InsightsPage() {
     drilldownsByInsight.set(row.insightId, inner);
   }
 
-  // Drilldown feedback per drilldown id — fetched in parallel and
-  // looked up by InsightCard when rendering each DrilldownButton.
-  const drilldownFeedbackEntries = await Promise.all(
-    drilldownRows.map(async (row) => {
-      const map = await getFeedbackForDrilldown({
-        userId,
-        drilldownId: row.id,
-      });
-      return [row.id, map] as const;
-    }),
-  );
-  const drilldownFeedbackById = new Map(drilldownFeedbackEntries);
+  // One IN-list query for all drilldown feedback (no N+1).
+  const drilldownFeedbackById = await getFeedbackForDrilldowns({
+    userId,
+    drilldownIds: drilldownRows.map((d) => d.id),
+  });
 
   return (
     <div className="flex flex-col gap-6">
@@ -125,7 +115,7 @@ export default async function InsightsPage() {
                 key={insight.id}
                 insight={insight}
                 previousInsightId={previousInsightId}
-                feedback={feedbackPerInsight[idx]}
+                feedback={feedbackByInsight.get(insight.id) ?? new Map()}
                 drilldownsByIndex={
                   drilldownsByInsight.get(insight.id) ?? new Map()
                 }

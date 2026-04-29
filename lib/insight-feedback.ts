@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { insights, insightFeedback, type InsightFeedback } from "@/lib/db/schema";
@@ -42,6 +42,44 @@ export async function getFeedbackForInsight(args: {
     map.set(feedbackKey({ kind: r.kind, itemIndex: r.itemIndex }), normalizeRating(r.rating));
   }
   return map;
+}
+
+/**
+ * Batch variant: pull feedback for multiple insights in one query and
+ * return a Map keyed by insightId. Used by the /insights list page to
+ * avoid N+1 queries when rendering 20 cards.
+ */
+export async function getFeedbackForInsights(args: {
+  userId: string;
+  insightIds: string[];
+}): Promise<Map<string, InsightFeedbackMap>> {
+  const result = new Map<string, InsightFeedbackMap>();
+  if (args.insightIds.length === 0) return result;
+
+  const rows = await db
+    .select()
+    .from(insightFeedback)
+    .where(
+      and(
+        eq(insightFeedback.userId, args.userId),
+        inArray(insightFeedback.insightId, args.insightIds),
+      ),
+    );
+
+  for (const r of rows) {
+    const inner = result.get(r.insightId) ?? new Map();
+    inner.set(
+      feedbackKey({ kind: r.kind, itemIndex: r.itemIndex }),
+      normalizeRating(r.rating),
+    );
+    result.set(r.insightId, inner);
+  }
+  // Make sure every requested id appears in the result, even when no
+  // feedback rows exist — keeps the caller's `.get(id)` simple.
+  for (const id of args.insightIds) {
+    if (!result.has(id)) result.set(id, new Map());
+  }
+  return result;
 }
 
 function normalizeRating(n: number): FeedbackRating {

@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { drilldownFeedback } from "@/lib/db/schema";
@@ -36,6 +36,42 @@ export async function getFeedbackForDrilldown(args: {
     );
   }
   return map;
+}
+
+/**
+ * Batch variant: pull feedback for many drilldowns in one query and
+ * return a Map keyed by drilldownId. Used by /insights list page to
+ * avoid N+1 queries.
+ */
+export async function getFeedbackForDrilldowns(args: {
+  userId: string;
+  drilldownIds: string[];
+}): Promise<Map<string, DrilldownFeedbackMap>> {
+  const result = new Map<string, DrilldownFeedbackMap>();
+  if (args.drilldownIds.length === 0) return result;
+
+  const rows = await db
+    .select()
+    .from(drilldownFeedback)
+    .where(
+      and(
+        eq(drilldownFeedback.userId, args.userId),
+        inArray(drilldownFeedback.drilldownId, args.drilldownIds),
+      ),
+    );
+
+  for (const r of rows) {
+    const inner = result.get(r.drilldownId) ?? new Map();
+    inner.set(
+      drilldownFeedbackKey({ kind: r.kind, itemIndex: r.itemIndex }),
+      normalize(r.rating),
+    );
+    result.set(r.drilldownId, inner);
+  }
+  for (const id of args.drilldownIds) {
+    if (!result.has(id)) result.set(id, new Map());
+  }
+  return result;
 }
 
 function normalize(n: number): FeedbackRating {
