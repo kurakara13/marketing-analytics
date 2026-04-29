@@ -29,6 +29,7 @@ import {
   feedbackKey,
   type InsightFeedbackMap,
 } from "@/lib/insight-feedback";
+import type { DrilldownFeedbackMap } from "@/lib/drilldown-feedback";
 import { FeedbackButtons } from "./feedback-buttons";
 import { ShareButton } from "./share-button";
 import { DrilldownButton } from "./drilldown-button";
@@ -85,6 +86,7 @@ export function InsightCard({
   showShare = true,
   linkTitle = false,
   drilldownsByIndex,
+  drilldownFeedbackById,
 }: {
   insight: Insight;
   /** When set, renders a "Bandingkan" button that links to the
@@ -109,6 +111,10 @@ export function InsightCard({
    *  the drilldown button still works but starts in "no cache" state.
    *  Public share view should pass an empty Map to disable. */
   drilldownsByIndex?: Map<number, InsightDrilldown>;
+  /** Optional pre-fetched feedback ratings keyed by drilldownId. The
+   *  card looks up by id when rendering each DrilldownButton; absent
+   *  entries render the button in neutral state. */
+  drilldownFeedbackById?: Map<string, DrilldownFeedbackMap>;
 }) {
   const ago = formatDistanceToNow(insight.createdAt, {
     addSuffix: true,
@@ -221,6 +227,12 @@ export function InsightCard({
                             insightId={insight.id}
                             observationIndex={i}
                             initial={drilldownsByIndex.get(i) ?? null}
+                            initialFeedback={(() => {
+                              const d = drilldownsByIndex.get(i);
+                              return d
+                                ? drilldownFeedbackById?.get(d.id)
+                                : undefined;
+                            })()}
                           />
                         </div>
                       ) : null}

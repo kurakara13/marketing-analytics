@@ -36,6 +36,11 @@ const MODEL = "gpt-5";
 // Surfaced to the UI via getUsageStatus() so users see how close they
 // are to the cap before the action fires.
 export const DAILY_INSIGHT_QUOTA = 30;
+// Drill-down is cheaper per call (smaller prompt, less reasoning) but
+// there are ~5 alert/warning observations per insight × 30 insights
+// = up to 150 potential calls/day in worst case. Cap a bit above
+// realistic usage: 60/day = generous human-in-the-loop budget.
+export const DAILY_DRILLDOWN_QUOTA = 60;
 
 // Structured output schema enforced by OpenAI's `json_schema` strict
 // mode. Same shape as the prior Claude implementation; OpenAI strict

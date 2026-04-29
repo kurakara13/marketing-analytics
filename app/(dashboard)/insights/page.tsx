@@ -3,7 +3,9 @@ import Link from "next/link";
 
 import { auth } from "@/lib/auth";
 import { getUsageStatus, listInsightsForUser } from "@/lib/ai/insights";
+import { getDrilldownUsage } from "@/lib/ai/drilldown";
 import { getFeedbackForInsight } from "@/lib/insight-feedback";
+import { getFeedbackForDrilldown } from "@/lib/drilldown-feedback";
 import { listConnectionsForUser } from "@/lib/connections";
 import { detectInterestingPeriods } from "@/lib/period-detection";
 import { db } from "@/lib/db";
@@ -27,9 +29,10 @@ export default async function InsightsPage() {
   if (!session?.user?.id) redirect("/login");
 
   const userId = session.user.id;
-  const [insights, usage, suggestedPeriods] = await Promise.all([
+  const [insights, usage, drilldownUsage, suggestedPeriods] = await Promise.all([
     listInsightsForUser(userId),
     getUsageStatus(userId),
+    getDrilldownUsage(userId),
     detectInterestingPeriods(userId),
   ]);
 
@@ -63,6 +66,19 @@ export default async function InsightsPage() {
     drilldownsByInsight.set(row.insightId, inner);
   }
 
+  // Drilldown feedback per drilldown id — fetched in parallel and
+  // looked up by InsightCard when rendering each DrilldownButton.
+  const drilldownFeedbackEntries = await Promise.all(
+    drilldownRows.map(async (row) => {
+      const map = await getFeedbackForDrilldown({
+        userId,
+        drilldownId: row.id,
+      });
+      return [row.id, map] as const;
+    }),
+  );
+  const drilldownFeedbackById = new Map(drilldownFeedbackEntries);
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -82,10 +98,11 @@ export default async function InsightsPage() {
                   : "text-muted-foreground/70",
             )}
           >
-            Quota hari ini: {usage.used} / {usage.limit} insight (rolling
-            24 jam)
+            Quota hari ini: {usage.used} / {usage.limit} insight ·{" "}
+            {drilldownUsage.used} / {drilldownUsage.limit} drill-down
+            (rolling 24 jam)
             {usage.resetsAt
-              ? ` · slot berikutnya tersedia ${usage.resetsAt.toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" })}`
+              ? ` · slot insight berikutnya ${usage.resetsAt.toLocaleString("id-ID", { dateStyle: "short", timeStyle: "short" })}`
               : null}
           </p>
         </div>
@@ -112,6 +129,7 @@ export default async function InsightsPage() {
                 drilldownsByIndex={
                   drilldownsByInsight.get(insight.id) ?? new Map()
                 }
+                drilldownFeedbackById={drilldownFeedbackById}
                 linkTitle
               />
             );

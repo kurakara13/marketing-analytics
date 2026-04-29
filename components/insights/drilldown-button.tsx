@@ -22,12 +22,20 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import type { InsightDrilldown } from "@/lib/db/schema";
+import {
+  drilldownFeedbackKey,
+  type DrilldownFeedbackMap,
+} from "@/lib/drilldown-feedback";
 import { generateDrilldownAction } from "@/app/(dashboard)/insights/drilldown-actions";
+import { DrilldownFeedbackButtons } from "./drilldown-feedback-buttons";
 
 type Props = {
   insightId: string;
   observationIndex: number;
   initial: InsightDrilldown | null;
+  /** Initial feedback ratings on hypotheses + fixes. Keyed by
+   *  `drilldownFeedbackKey({kind, itemIndex})`. Empty Map = neutral. */
+  initialFeedback?: DrilldownFeedbackMap;
 };
 
 // Inline button on each observation that opens a dialog with the
@@ -43,6 +51,7 @@ export function DrilldownButton({
   insightId,
   observationIndex,
   initial,
+  initialFeedback,
 }: Props) {
   const [drilldown, setDrilldown] = useState<InsightDrilldown | null>(initial);
   const [isPending, startTransition] = useTransition();
@@ -103,6 +112,7 @@ export function DrilldownButton({
         ) : (
           <DrilldownContent
             drilldown={drilldown}
+            feedback={initialFeedback ?? new Map()}
             onRerun={handleGenerate}
             isPending={isPending}
           />
@@ -114,10 +124,12 @@ export function DrilldownButton({
 
 function DrilldownContent({
   drilldown,
+  feedback,
   onRerun,
   isPending,
 }: {
   drilldown: InsightDrilldown;
+  feedback: DrilldownFeedbackMap;
   onRerun: () => void;
   isPending: boolean;
 }) {
@@ -162,61 +174,85 @@ function DrilldownContent({
       {/* Hypotheses */}
       <Section title="Root cause hypotheses" icon={AlertCircle}>
         <ol className="space-y-2">
-          {c.hypotheses.map((h, i) => (
-            <li
-              key={i}
-              className="border-border/60 rounded-md border bg-muted/30 p-3 text-sm"
-            >
-              <div className="mb-1 flex items-center gap-2 font-medium">
-                <span
-                  className={cn(
-                    "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-                    h.likelihood === "high"
-                      ? "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300"
-                      : h.likelihood === "medium"
-                        ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
-                        : "bg-muted text-muted-foreground",
-                  )}
-                >
-                  {h.likelihood}
-                </span>
-                <span className="min-w-0 flex-1">{h.title}</span>
-              </div>
-              <p className="text-muted-foreground text-xs leading-relaxed">
-                {h.reasoning}
-              </p>
-            </li>
-          ))}
+          {c.hypotheses.map((h, i) => {
+            const rating = feedback.get(
+              drilldownFeedbackKey({ kind: "hypothesis", itemIndex: i }),
+            ) ?? 0;
+            return (
+              <li
+                key={i}
+                className="border-border/60 rounded-md border bg-muted/30 p-3 text-sm"
+              >
+                <div className="mb-1 flex items-center gap-2 font-medium">
+                  <span
+                    className={cn(
+                      "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                      h.likelihood === "high"
+                        ? "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300"
+                        : h.likelihood === "medium"
+                          ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+                          : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {h.likelihood}
+                  </span>
+                  <span className="min-w-0 flex-1">{h.title}</span>
+                  <DrilldownFeedbackButtons
+                    drilldownId={drilldown.id}
+                    kind="hypothesis"
+                    itemIndex={i}
+                    initialRating={rating}
+                  />
+                </div>
+                <p className="text-muted-foreground text-xs leading-relaxed">
+                  {h.reasoning}
+                </p>
+              </li>
+            );
+          })}
         </ol>
       </Section>
 
       {/* Fixes */}
       <Section title="Fix steps" icon={CheckCircle2}>
         <ol className="space-y-2">
-          {c.fixes.map((f, i) => (
-            <li
-              key={i}
-              className="border-border/60 rounded-md border bg-muted/30 p-3 text-sm"
-            >
-              <div className="mb-1 font-semibold">{f.title}</div>
-              {f.where ? (
-                <div className="text-muted-foreground mb-2 text-[11px]">
-                  📍 {f.where}
+          {c.fixes.map((f, i) => {
+            const rating = feedback.get(
+              drilldownFeedbackKey({ kind: "fix", itemIndex: i }),
+            ) ?? 0;
+            return (
+              <li
+                key={i}
+                className="border-border/60 rounded-md border bg-muted/30 p-3 text-sm"
+              >
+                <div className="mb-1 flex items-center gap-2 font-semibold">
+                  <span className="min-w-0 flex-1">{f.title}</span>
+                  <DrilldownFeedbackButtons
+                    drilldownId={drilldown.id}
+                    kind="fix"
+                    itemIndex={i}
+                    initialRating={rating}
+                  />
                 </div>
-              ) : null}
-              <ul className="space-y-1">
-                {f.steps.map((step, j) => (
-                  <li
-                    key={j}
-                    className="flex items-start gap-1.5 text-xs leading-relaxed"
-                  >
-                    <ChevronRight className="text-muted-foreground/60 mt-0.5 size-3.5 shrink-0" />
-                    <span>{step}</span>
-                  </li>
-                ))}
-              </ul>
-            </li>
-          ))}
+                {f.where ? (
+                  <div className="text-muted-foreground mb-2 text-[11px]">
+                    📍 {f.where}
+                  </div>
+                ) : null}
+                <ul className="space-y-1">
+                  {f.steps.map((step, j) => (
+                    <li
+                      key={j}
+                      className="flex items-start gap-1.5 text-xs leading-relaxed"
+                    >
+                      <ChevronRight className="text-muted-foreground/60 mt-0.5 size-3.5 shrink-0" />
+                      <span>{step}</span>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            );
+          })}
         </ol>
       </Section>
 

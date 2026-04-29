@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { findInsightByIdForUser } from "@/lib/ai/insights";
 import { getFeedbackForInsight } from "@/lib/insight-feedback";
+import { getFeedbackForDrilldown } from "@/lib/drilldown-feedback";
 import { findDrilldown } from "@/lib/ai/drilldown";
 import { db } from "@/lib/db";
 import { insightDrilldowns, type InsightDrilldown } from "@/lib/db/schema";
@@ -62,6 +63,18 @@ export default async function InsightDetailPage({
     drilldownsByIndex.set(d.observationIndex, d);
   }
 
+  // Drilldown feedback per drilldown id, fetched in parallel.
+  const drilldownFeedbackEntries = await Promise.all(
+    drilldownRows.map(async (row) => {
+      const map = await getFeedbackForDrilldown({
+        userId: session.user.id!,
+        drilldownId: row.id,
+      });
+      return [row.id, map] as const;
+    }),
+  );
+  const drilldownFeedbackById = new Map(drilldownFeedbackEntries);
+
   return (
     <div className="flex flex-col gap-4">
       <Link
@@ -80,6 +93,7 @@ export default async function InsightDetailPage({
         previousInsightId={previousInsight?.id ?? null}
         feedback={feedback}
         drilldownsByIndex={drilldownsByIndex}
+        drilldownFeedbackById={drilldownFeedbackById}
       />
     </div>
   );

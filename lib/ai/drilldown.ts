@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { and, eq } from "drizzle-orm";
+import { and, eq, gte } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/lib/db";
@@ -11,7 +11,7 @@ import {
   type InsightDrilldown,
 } from "@/lib/db/schema";
 import { fetchReportData } from "@/lib/reports/fetch-report-data";
-import { findInsightByIdForUser } from "./insights";
+import { DAILY_DRILLDOWN_QUOTA, findInsightByIdForUser } from "./insights";
 import { detectAttributionFlags } from "./attribution-flags";
 
 // Drill-down: given ONE observation from a parent insight, run a
@@ -128,6 +128,30 @@ const SYSTEM_PROMPT = `Anda adalah seorang senior digital marketing analyst & te
 3. Fix steps harus eksekutif — operator (bukan dev) bisa langsung apply. Sebut path UI persis di mana setting bisa di-edit.
 4. Kalau evidence yang Anda butuhkan TIDAK ada di data yang dikasih (mis. tidak ada per-event breakdown, tidak ada source/medium di top pages), katakan eksplisit di evidence sebagai type=\`absence\` — itu informative juga.`;
 
+export async function getDrilldownUsage(userId: string): Promise<{
+  used: number;
+  remaining: number;
+  limit: number;
+}> {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const rows = await db
+    .select({ id: insightDrilldowns.id })
+    .from(insightDrilldowns)
+    .where(
+      and(
+        eq(insightDrilldowns.userId, userId),
+        gte(insightDrilldowns.createdAt, since),
+      ),
+    )
+    .limit(DAILY_DRILLDOWN_QUOTA + 1);
+  const used = rows.length;
+  return {
+    used,
+    remaining: Math.max(0, DAILY_DRILLDOWN_QUOTA - used),
+    limit: DAILY_DRILLDOWN_QUOTA,
+  };
+}
+
 export async function generateDrilldown(args: {
   userId: string;
   insightId: string;
@@ -141,6 +165,16 @@ export async function generateDrilldown(args: {
   const observation = insight.observations[observationIndex];
   if (!observation) {
     throw new Error("Observation index di luar range");
+  }
+
+  // Quota check happens BEFORE the API call. Re-runs of the same
+  // (insightId, observationIndex) still count — each re-run is a
+  // fresh GPT-5 call.
+  const usage = await getDrilldownUsage(userId);
+  if (usage.remaining === 0) {
+    throw new Error(
+      `Quota drill-down harian habis (${usage.limit}/24 jam). Coba lagi besok.`,
+    );
   }
 
   // Re-fetch ReportData with the SAME window the insight was generated
