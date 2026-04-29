@@ -1,6 +1,6 @@
 import { ArrowDown, ArrowUp, Minus, type LucideIcon } from "lucide-react";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -40,6 +40,14 @@ function deltaText(
   };
 }
 
+// Refreshed KPI card — bigger primary number, clearer hierarchy:
+//   icon-circle (label-color)   LABEL
+//                                BIG NUMBER
+//                                ↑ +28% (delta as colored chip)  hint
+//
+// Goal: the primary number dominates the card visually. Delta as a
+// pill (rounded chip with bg) is more scannable than inline text.
+// Hover slight elevation for grouped feel with siblings.
 export function KpiCard({
   label,
   current,
@@ -52,45 +60,51 @@ export function KpiCard({
   const delta = showDelta ? deltaText(current, previous) : null;
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-muted-foreground text-sm font-medium">
-          {label}
-        </CardTitle>
-        <Icon className="text-muted-foreground size-4" />
-      </CardHeader>
-      <CardContent>
-        <div className="flex items-baseline gap-2">
-          <div className="text-2xl font-semibold tracking-tight">
+    <Card className="hover:shadow-sm transition-shadow">
+      <div className="flex flex-col gap-3 p-5">
+        <div className="flex items-center gap-2">
+          <div className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
+            <Icon className="size-3.5" />
+          </div>
+          <span className="text-muted-foreground text-[10px] font-semibold uppercase tracking-wider">
+            {label}
+          </span>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <div className="text-foreground text-[28px] font-semibold leading-none tracking-tight tabular-nums">
             {format(current)}
           </div>
-          {delta ? (
-            <span
-              className={cn(
-                "inline-flex items-center gap-0.5 text-xs font-medium",
-                delta.direction === "up" &&
-                  "text-emerald-700 dark:text-emerald-400",
-                delta.direction === "down" &&
-                  "text-rose-700 dark:text-rose-400",
-                delta.direction === "flat" && "text-muted-foreground",
-              )}
-              title={`Sebelumnya: ${format(previous!)}`}
-            >
-              {delta.direction === "up" ? (
-                <ArrowUp className="size-3" />
-              ) : delta.direction === "down" ? (
-                <ArrowDown className="size-3" />
-              ) : (
-                <Minus className="size-3" />
-              )}
-              {delta.text}
-            </span>
-          ) : null}
+          <div className="flex items-center gap-2 min-h-5">
+            {delta ? (
+              <span
+                className={cn(
+                  "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums",
+                  delta.direction === "up" &&
+                    "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+                  delta.direction === "down" &&
+                    "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
+                  delta.direction === "flat" &&
+                    "bg-muted text-muted-foreground",
+                )}
+                title={`Sebelumnya: ${format(previous!)}`}
+              >
+                {delta.direction === "up" ? (
+                  <ArrowUp className="size-3" />
+                ) : delta.direction === "down" ? (
+                  <ArrowDown className="size-3" />
+                ) : (
+                  <Minus className="size-3" />
+                )}
+                {delta.text}
+              </span>
+            ) : null}
+            {hint ? (
+              <span className="text-muted-foreground text-[11px]">{hint}</span>
+            ) : null}
+          </div>
         </div>
-        {hint ? (
-          <p className="text-muted-foreground mt-0.5 text-xs">{hint}</p>
-        ) : null}
-      </CardContent>
+      </div>
     </Card>
   );
 }
