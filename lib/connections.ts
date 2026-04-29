@@ -120,6 +120,53 @@ export async function listConnectionsWithSyncForUser(
   return conns.map((c) => ({ ...c, lastSync: latestByConn.get(c.id) ?? null }));
 }
 
+/**
+ * Returns the most-recent N sync runs for a user, joined with their
+ * source connection's display fields. Used by the /data-sources/history
+ * audit log page.
+ */
+export type SyncRunWithConnection = SyncRun & {
+  connection: {
+    connectorId: string;
+    externalAccountId: string;
+    externalAccountName: string | null;
+  };
+};
+
+export async function listRecentSyncRunsForUser(args: {
+  userId: string;
+  limit?: number;
+}): Promise<SyncRunWithConnection[]> {
+  const limit = args.limit ?? 100;
+  const conns = await listConnectionsForUser(args.userId);
+  if (conns.length === 0) return [];
+
+  const connectionsById = new Map(conns.map((c) => [c.id, c]));
+  const runs = await db
+    .select()
+    .from(syncRuns)
+    .where(
+      inArray(
+        syncRuns.connectionId,
+        conns.map((c) => c.id),
+      ),
+    )
+    .orderBy(desc(syncRuns.startedAt))
+    .limit(limit);
+
+  return runs.map((r) => {
+    const c = connectionsById.get(r.connectionId);
+    return {
+      ...r,
+      connection: {
+        connectorId: c?.connectorId ?? "?",
+        externalAccountId: c?.externalAccountId ?? "?",
+        externalAccountName: c?.externalAccountName ?? null,
+      },
+    };
+  });
+}
+
 export async function getConnection(args: {
   userId: string;
   connectionId: string;

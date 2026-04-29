@@ -1,5 +1,7 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
+import Link from "next/link";
+import { History } from "lucide-react";
 
 import { auth } from "@/lib/auth";
 import { connectors } from "@/lib/connectors/registry";
@@ -7,6 +9,8 @@ import { listConnectionsWithSyncForUser } from "@/lib/connections";
 import { ConnectorCard } from "@/components/data-sources/connector-card";
 import { OAuthStatusToast } from "@/components/data-sources/oauth-status-toast";
 import { SyncAllButton } from "@/components/data-sources/sync-all-button";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export default async function DataSourcesPage() {
   const session = await auth();
@@ -31,7 +35,18 @@ export default async function DataSourcesPage() {
             memberikan akses read-only ke data Anda.
           </p>
         </div>
-        {hasActiveConnection ? <SyncAllButton /> : null}
+        <div className="flex items-center gap-2">
+          {hasActiveConnection ? (
+            <Link
+              href="/data-sources/history"
+              className={cn(buttonVariants({ variant: "outline" }))}
+            >
+              <History className="size-4" />
+              History
+            </Link>
+          ) : null}
+          {hasActiveConnection ? <SyncAllButton /> : null}
+        </div>
       </div>
 
       {/* Suspense is required because OAuthStatusToast uses useSearchParams,

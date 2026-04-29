@@ -87,9 +87,13 @@ export function SyncHealthSummary({ connections }: Props) {
           ? `${real.length} koneksi sehat · sync terbaru ${formatDistanceToNow(oldestSync, { addSuffix: true, locale: idLocale })}`
           : `${real.length} koneksi aktif`;
 
+  // Errored case → land on history page (full audit log + error
+  // messages). Other states → /data-sources for status + retry options.
+  const href = tone === "error" ? "/data-sources/history" : "/data-sources";
+
   return (
     <Link
-      href="/data-sources"
+      href={href}
       className={cn(
         "flex items-center gap-2 rounded-md border px-3 py-2 text-xs font-medium transition-colors",
         "hover:opacity-90",
