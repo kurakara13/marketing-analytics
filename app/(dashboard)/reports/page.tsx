@@ -125,7 +125,11 @@ export default async function ReportsPage() {
                     >
                       Generate
                     </a>
-                    <TemplateRowActions templateId={r.id} name={r.name} />
+                    <TemplateRowActions
+                      templateId={r.id}
+                      name={r.name}
+                      description={r.description}
+                    />
                   </div>
                 </CardContent>
               </Card>

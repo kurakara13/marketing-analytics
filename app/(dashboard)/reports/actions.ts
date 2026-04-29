@@ -129,6 +129,122 @@ export async function deleteTemplateAction(
   return { success: true };
 }
 
+// ─── Rename template ────────────────────────────────────────────────────
+const renameInput = z.object({
+  templateId: z.string().min(1),
+  name: z.string().trim().min(1).max(120),
+  description: z.string().max(500).optional(),
+});
+
+export type RenameTemplateResult = { error: string } | { success: true };
+
+export async function renameTemplateAction(
+  input: z.infer<typeof renameInput>,
+): Promise<RenameTemplateResult> {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return { error: "Tidak ada session aktif" };
+  }
+  const parsed = renameInput.safeParse(input);
+  if (!parsed.success) {
+    return { error: "Input tidak valid" };
+  }
+  const trimmedDesc =
+    typeof parsed.data.description === "string"
+      ? parsed.data.description.trim()
+      : null;
+  const result = await db
+    .update(reportTemplates)
+    .set({
+      name: parsed.data.name,
+      description: trimmedDesc && trimmedDesc.length > 0 ? trimmedDesc : null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(reportTemplates.id, parsed.data.templateId),
+        eq(reportTemplates.userId, session.user.id),
+      ),
+    )
+    .returning({ id: reportTemplates.id });
+  if (result.length === 0) {
+    return { error: "Report tidak ditemukan" };
+  }
+  revalidatePath("/reports");
+  return { success: true };
+}
+
+// ─── Duplicate template ─────────────────────────────────────────────────
+const duplicateInput = z.object({ templateId: z.string().min(1) });
+
+export type DuplicateTemplateResult =
+  | { error: string }
+  | { success: true; templateId: string };
+
+export async function duplicateTemplateAction(
+  input: z.infer<typeof duplicateInput>,
+): Promise<DuplicateTemplateResult> {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return { error: "Tidak ada session aktif" };
+  }
+  const parsed = duplicateInput.safeParse(input);
+  if (!parsed.success) {
+    return { error: "Input tidak valid" };
+  }
+
+  // Read the source template (ownership-checked).
+  const [source] = await db
+    .select()
+    .from(reportTemplates)
+    .where(
+      and(
+        eq(reportTemplates.id, parsed.data.templateId),
+        eq(reportTemplates.userId, session.user.id),
+      ),
+    )
+    .limit(1);
+  if (!source) {
+    return { error: "Report tidak ditemukan" };
+  }
+
+  // Re-id every slide + every widget so the duplicate is fully
+  // independent — no shared id risks from cross-template editing.
+  let definition: TemplateDefinition;
+  try {
+    definition = parseTemplateDefinition(source.definition);
+  } catch (err) {
+    return {
+      error:
+        err instanceof Error
+          ? `Definisi report tidak valid: ${err.message.slice(0, 200)}`
+          : "Definisi report tidak valid",
+    };
+  }
+  const reIdedDefinition: TemplateDefinition = {
+    ...definition,
+    slides: definition.slides.map((slide) => ({
+      ...slide,
+      id: crypto.randomUUID(),
+      widgets: slide.widgets.map((w) => ({ ...w, id: crypto.randomUUID() })),
+    })),
+  };
+
+  const [created] = await db
+    .insert(reportTemplates)
+    .values({
+      userId: session.user.id,
+      name: `${source.name} (copy)`,
+      description: source.description,
+      schemaVersion: source.schemaVersion,
+      definition: reIdedDefinition,
+    })
+    .returning({ id: reportTemplates.id });
+
+  revalidatePath("/reports");
+  return { success: true, templateId: created.id };
+}
+
 // ─── Upload image (for image widgets) ───────────────────────────────────
 export type UploadImageResult =
   | { error: string }
