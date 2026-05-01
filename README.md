@@ -1,11 +1,11 @@
 # Marketing Analytics
 
-Multi-source SaaS reporting platform that aggregates campaign and analytics
-data from **Google Ads, Google Analytics 4, Search Console, and Meta Ads**
-into a unified dashboard for digital marketing teams.
+Internal multi-source reporting platform that aggregates campaign and
+analytics data from **Google Ads, Google Analytics 4, and Search
+Console** into a unified dashboard for digital marketing teams.
 
-> **Status**: Private beta with one pilot customer. General availability
-> planned late 2026.
+> **Operator**: PT Ekspansi Bisnis Indonesia ([xpnd.co.id](https://xpnd.co.id)).
+> **Status**: Internal use, private beta. Not a public SaaS.
 
 ## What it does
 
@@ -173,10 +173,22 @@ Production deployments must:
 - Run the worker (`pnpm worker`) under PM2 / systemd alongside `next start`
 - Pass env vars through the OS / orchestrator, never via committed `.env` files
 
+## Operator
+
+This platform is operated by **PT Ekspansi Bisnis Indonesia**
+([xpnd.co.id](https://xpnd.co.id)) for internal marketing analytics
+across the company's own Google Ads, Google Analytics 4, and Search
+Console properties. Public legal pages:
+
+- [Privacy Policy](https://app.xpnd.co.id/privacy) (or `/privacy` on
+  the deployed instance)
+- [Terms of Service](https://app.xpnd.co.id/terms) (or `/terms`)
+
 ## Contact
 
-`johnputra13@gmail.com`
+For questions related to this platform, the operator, or data
+handling: **jihad@xpnd.co.id**.
 
 ## License
 
-Private / internal.
+Private / internal. No public license; not for redistribution.
