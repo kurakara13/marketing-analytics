@@ -46,21 +46,21 @@ export function SidebarUserCard({ name, email, image }: Props) {
       <DropdownMenuTrigger
         aria-label="Buka menu akun"
         className={cn(
-          "hover:bg-sidebar-accent/60 group flex w-full items-center gap-2.5 rounded-md p-2 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          "hover:bg-sidebar-accent/70 group flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring",
         )}
       >
-        <Avatar className="size-8 shrink-0">
+        <Avatar className="border-sidebar-border/70 size-7 shrink-0 border">
           {image ? <AvatarImage src={image} alt={name ?? email ?? ""} /> : null}
-          <AvatarFallback className="text-[10px]">
+          <AvatarFallback className="bg-sidebar-accent text-sidebar-foreground/80 text-[10px] font-medium">
             {initialsFor(name, email)}
           </AvatarFallback>
         </Avatar>
-        <div className="min-w-0 flex-1 flex flex-col">
-          <span className="text-sidebar-foreground truncate text-sm font-medium leading-tight">
+        <div className="min-w-0 flex-1 flex flex-col leading-[1.15]">
+          <span className="text-sidebar-foreground truncate text-[13px] font-medium">
             {name ?? "Pengguna"}
           </span>
           {email ? (
-            <span className="text-sidebar-foreground/60 truncate text-[11px] leading-tight">
+            <span className="text-sidebar-foreground/55 truncate text-[10.5px]">
               {email}
             </span>
           ) : null}
