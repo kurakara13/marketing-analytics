@@ -1,236 +1,131 @@
-import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import Link from "next/link";
-import {
-  Activity,
-  Database,
-  Download,
-  Eye,
-  MousePointerClick,
-  Target,
-} from "lucide-react";
 
 import { auth } from "@/lib/auth";
-import { getCampaignBreakdown, getMetricsSummary } from "@/lib/metrics-queries";
-import { getOnboardingSteps } from "@/lib/onboarding";
-import { listInsightsForUser } from "@/lib/ai/insights";
+import { listInsightsForUser, getUsageStatus } from "@/lib/ai/insights";
+import { getDrilldownUsage } from "@/lib/ai/drilldown";
 import { listConnectionsWithSyncForUser } from "@/lib/connections";
+import { getOnboardingSteps } from "@/lib/onboarding";
+import { getDashboardActivityFeed } from "@/lib/dashboard-feed";
 import { OnboardingChecklist } from "@/components/onboarding/onboarding-checklist";
-import { MorningBrief } from "@/components/dashboard/morning-brief";
-import { SyncHealthSummary } from "@/components/dashboard/sync-health-summary";
-import { PageHeader } from "@/components/layout/page-header";
-import { buttonVariants } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { CampaignsTable } from "@/components/dashboard/campaigns-table";
-import { KpiCard } from "@/components/dashboard/kpi-card";
-import { MetricsChart } from "@/components/dashboard/metrics-chart";
-import { RangePicker } from "@/components/dashboard/range-picker";
-import { DEFAULT_DAYS, parseDaysParam } from "@/lib/dashboard-ranges";
-import { cn } from "@/lib/utils";
+import { DashboardGreeting } from "@/components/dashboard/dashboard-greeting";
+import { LatestInsightHero } from "@/components/dashboard/latest-insight-hero";
+import { UrgentObservations } from "@/components/dashboard/urgent-observations";
+import { PlatformStatus } from "@/components/dashboard/platform-status";
+import { ActivityFeed } from "@/components/dashboard/activity-feed";
+import { DashboardShortcuts } from "@/components/dashboard/dashboard-shortcuts";
 
-const numberFmt = new Intl.NumberFormat("id-ID");
-const compactFmt = new Intl.NumberFormat("id-ID", {
-  notation: "compact",
-  maximumFractionDigits: 1,
-});
+// /dashboard — "Editorial Daily Briefing".
+//
+// Replaces the earlier scoreboard layout (KPI grid + trend chart +
+// campaign table). Reasoning: with multiple data sources the
+// aggregate KPIs become misleading, and the chart/table belong on
+// per-source detail pages anyway. The dashboard's job is to be the
+// daily orientation surface — what AI is telling you, what's urgent,
+// platform health, and recent workspace activity.
+//
+// Sections (top → bottom):
+//   1. Greeting + date eyebrow
+//   2. Latest insight hero (feature card)
+//   3. 3 urgent observations across recent insights
+//   4. Platform status strip (connections + AI quota)
+//   5. Activity feed (insights + drilldowns + sync runs interleaved)
+//   6. Quick shortcuts row
+//
+// Empty state: when no connections at all, we fall through to the
+// onboarding hero (same as before).
 
-export default async function DashboardPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ days?: string }>;
-}) {
+export default async function DashboardPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const params = await searchParams;
-  const windowDays = parseDaysParam(params?.days);
+  const userId = session.user.id;
+  const greetingName = session.user.name ?? null;
 
-  const greetingName = session.user.name ?? session.user.email ?? "";
   const [
-    summary,
-    campaignRows,
     onboardingSteps,
-    recentInsights,
+    insights,
     connectionsWithSync,
+    insightUsage,
+    drilldownUsage,
+    activity,
   ] = await Promise.all([
-    getMetricsSummary({ userId: session.user.id, days: windowDays }),
-    getCampaignBreakdown({ userId: session.user.id, days: windowDays }),
-    getOnboardingSteps(session.user.id),
-    listInsightsForUser(session.user.id),
-    listConnectionsWithSyncForUser(session.user.id),
+    getOnboardingSteps(userId),
+    listInsightsForUser(userId),
+    listConnectionsWithSyncForUser(userId),
+    getUsageStatus(userId),
+    getDrilldownUsage(userId),
+    getDashboardActivityFeed(userId),
   ]);
-  const onboardingComplete = onboardingSteps.every((s) => s.done);
-  const latestInsight = recentInsights[0] ?? null;
 
-  if (summary.connectedSources === 0) {
-    // Brand-new user — show the full onboarding hero instead of the
-    // generic "no connection" empty state.
+  const onboardingComplete = onboardingSteps.every((s) => s.done);
+  const realConnections = connectionsWithSync.filter(
+    (c) => !c.externalAccountId.startsWith("_pending_"),
+  );
+
+  // Brand-new user — show onboarding hero instead of empty briefing.
+  if (realConnections.length === 0) {
     return <OnboardingChecklist steps={onboardingSteps} variant="full" />;
   }
 
-  if (!summary.hasData) {
-    return (
-      <div className="flex flex-col gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Selamat datang{greetingName ? `, ${greetingName}` : ""}.
-          </h1>
-          <p className="text-muted-foreground text-sm">
-            {summary.connectedSources} koneksi aktif, tapi belum ada data
-            tersinkron untuk {windowDays} hari terakhir.
-          </p>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Sync data dulu</CardTitle>
-            <CardDescription>
-              Klik <strong>Sync all</strong> di halaman Data Sources atau tunggu
-              cron worker berjalan.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link
-              href="/data-sources"
-              className={cn(buttonVariants({ variant: "default" }))}
-            >
-              Buka Data Sources
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  const { totals, previousTotals, daily } = summary;
-  const chartData = daily.map((p) => ({
-    date: p.date,
-    sessions: p.sessions,
-    conversions: p.conversions,
-  }));
-
-  const compactNumber = (n: number) => compactFmt.format(n);
-  const formatInt = (n: number) => numberFmt.format(Math.round(n));
-  const formatRupiah = (n: number) => `Rp ${numberFmt.format(Math.round(n))}`;
+  const latestInsight = insights[0] ?? null;
+  // Top urgent observations come from the 5 most recent insights so
+  // we get fresh signal but don't dilute with months of history.
+  const recentForObservations = insights.slice(0, 5);
 
   return (
-    <div className="flex flex-col gap-6">
-      <PageHeader
-        title={`Selamat datang${greetingName ? `, ${greetingName}` : ""}.`}
-        subtitle={
-          <>
-            Ringkasan {windowDays} hari terakhir vs {windowDays} hari
-            sebelumnya, dari {summary.connectedSources} koneksi aktif.
-          </>
-        }
-        actions={
-          <>
-            <Suspense fallback={null}>
-              <RangePicker defaultDays={DEFAULT_DAYS} />
-            </Suspense>
-            <a
-              href={`/api/export/daily-metrics?days=${windowDays}`}
-              download
-              className={cn(buttonVariants({ variant: "outline" }))}
-            >
-              <Download className="size-4" />
-              Export CSV
-            </a>
-          </>
-        }
-      />
+    <div className="flex flex-col gap-10 pb-12">
+      {/* 1. Greeting */}
+      <DashboardGreeting name={greetingName} />
 
+      {/* Onboarding banner — shows only when not all steps complete.
+       *  Sits above the briefing as a soft nudge. */}
       {!onboardingComplete ? (
         <OnboardingChecklist steps={onboardingSteps} variant="compact" />
       ) : null}
 
-      <SyncHealthSummary connections={connectionsWithSync} />
+      {/* 2. Latest insight feature */}
+      {latestInsight ? (
+        <LatestInsightHero insight={latestInsight} />
+      ) : (
+        <NoInsightYet />
+      )}
 
-      {latestInsight ? <MorningBrief insight={latestInsight} /> : null}
+      {/* 3. 3 urgent observations */}
+      <UrgentObservations insights={recentForObservations} />
 
-      <div className="flex items-center gap-2 -mb-2">
-        <h2 className="text-foreground text-sm font-semibold tracking-tight">
-          KPI {windowDays} hari
-        </h2>
-        <span className="text-muted-foreground text-xs">
-          · perbandingan vs {windowDays} hari sebelumnya
+      {/* 4. Platform status strip */}
+      <PlatformStatus
+        connections={connectionsWithSync}
+        insightUsage={insightUsage}
+        drilldownUsage={drilldownUsage}
+      />
+
+      {/* 5. Activity feed */}
+      <ActivityFeed events={activity} />
+
+      {/* 6. Shortcuts */}
+      <DashboardShortcuts />
+    </div>
+  );
+}
+
+// ─── Sub-component: empty insight state ─────────────────────────────
+function NoInsightYet() {
+  return (
+    <div className="bg-card border-border/60 flex flex-col items-start gap-3 rounded-xl border border-dashed p-6 sm:p-8">
+      <div className="text-muted-foreground/80 inline-flex items-center gap-2 text-[11px]">
+        <span className="font-display italic tracking-wide">
+          Insight terbaru
         </span>
       </div>
-
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard
-          label="Sessions"
-          icon={Activity}
-          current={totals.sessions}
-          previous={previousTotals.sessions}
-          format={compactNumber}
-        />
-        <KpiCard
-          label="Pageviews"
-          icon={Eye}
-          current={totals.pageviews}
-          previous={previousTotals.pageviews}
-          format={compactNumber}
-        />
-        <KpiCard
-          label="Conversions"
-          icon={Target}
-          current={totals.conversions}
-          previous={previousTotals.conversions}
-          format={formatInt}
-          hint={
-            totals.clicks > 0
-              ? `${((totals.conversions / totals.clicks) * 100).toFixed(2)}% dari clicks`
-              : undefined
-          }
-        />
-        <KpiCard
-          label="Clicks (Ads)"
-          icon={MousePointerClick}
-          current={totals.clicks}
-          previous={previousTotals.clicks}
-          format={compactNumber}
-          hint={
-            totals.spend > 0 ? `${formatRupiah(totals.spend)} spend` : undefined
-          }
-        />
-      </div>
-
-      <Card>
-        <CardHeader>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <CardTitle>Trend {windowDays} hari</CardTitle>
-              <CardDescription>
-                Sessions (biru) dan conversions (hijau) per hari.
-              </CardDescription>
-            </div>
-            <Database className="text-muted-foreground size-4" />
-          </div>
-        </CardHeader>
-        <CardContent>
-          <MetricsChart data={chartData} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Breakdown per Campaign</CardTitle>
-          <CardDescription>
-            Diurutkan dari spend tertinggi. Row dengan spend = 0 (mis. GA4
-            account-level rollup) diurutkan berdasarkan clicks lalu sessions.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <CampaignsTable rows={campaignRows} />
-        </CardContent>
-      </Card>
+      <h2 className="text-foreground font-display text-[24px] font-medium leading-[1.18] tracking-tight">
+        Belum ada briefing pagi
+      </h2>
+      <p className="text-muted-foreground max-w-xl text-sm leading-relaxed">
+        Generate insight pertama Anda untuk memulai briefing harian. AI
+        akan menganalisis data minggu lalu dan menghasilkan ringkasan,
+        observasi, dan rekomendasi yang actionable.
+      </p>
     </div>
   );
 }
