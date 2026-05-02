@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { Save } from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
+import { Check, Save, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -19,16 +19,27 @@ import { saveBusinessContextAction } from "@/app/(dashboard)/settings/actions";
 
 type BrandVoice = "professional" | "casual" | "technical";
 
+type DiscoveredEvent = {
+  eventName: string;
+  eventCount: number;
+  sources: string[];
+};
+
 type Initial = {
   industry: string | null;
   targetAudience: string | null;
   brandVoice: BrandVoice | null;
   businessGoals: string | null;
-  leadEventName: string | null;
+  leadEvents: string[] | null;
+  leadLabel: string | null;
 } | null;
 
 type Props = {
   initial: Initial;
+  /** GA4 events discovered from user's connected properties — passed
+   *  in from the server page so the picker shows real options with
+   *  counts. Empty array when no GA4 connection or fetch failed. */
+  discoveredEvents: DiscoveredEvent[];
 };
 
 const TEXTAREA_CLASS = cn(
@@ -38,7 +49,9 @@ const TEXTAREA_CLASS = cn(
   "resize-y",
 );
 
-export function BusinessContextForm({ initial }: Props) {
+const idFmt = new Intl.NumberFormat("id-ID");
+
+export function BusinessContextForm({ initial, discoveredEvents }: Props) {
   const [isPending, startTransition] = useTransition();
 
   const [industry, setIndustry] = useState(initial?.industry ?? "");
@@ -51,9 +64,58 @@ export function BusinessContextForm({ initial }: Props) {
   const [businessGoals, setBusinessGoals] = useState(
     initial?.businessGoals ?? "",
   );
-  const [leadEventName, setLeadEventName] = useState(
-    initial?.leadEventName ?? "",
+  const [leadEvents, setLeadEvents] = useState<string[]>(
+    initial?.leadEvents ?? [],
   );
+  const [leadLabel, setLeadLabel] = useState(initial?.leadLabel ?? "");
+  const [eventSearch, setEventSearch] = useState("");
+
+  // Map discovered events for fast lookup of counts. Some events the
+  // user already selected might not be in `discoveredEvents` (mis.
+  // legacy event no longer firing, or zero count in last 30d) — we
+  // still render them so the user can keep or remove them.
+  const eventsByName = useMemo(() => {
+    const map = new Map(discoveredEvents.map((e) => [e.eventName, e]));
+    for (const name of leadEvents) {
+      if (!map.has(name)) {
+        map.set(name, { eventName: name, eventCount: 0, sources: [] });
+      }
+    }
+    return map;
+  }, [discoveredEvents, leadEvents]);
+
+  // Sorted, filtered event list for the picker. Selected events
+  // float to top.
+  const visibleEvents = useMemo(() => {
+    const all = Array.from(eventsByName.values());
+    const filter = eventSearch.trim().toLowerCase();
+    const filtered = filter
+      ? all.filter((e) => e.eventName.toLowerCase().includes(filter))
+      : all;
+    return filtered.sort((a, b) => {
+      const aSel = leadEvents.includes(a.eventName) ? 0 : 1;
+      const bSel = leadEvents.includes(b.eventName) ? 0 : 1;
+      if (aSel !== bSel) return aSel - bSel;
+      if (b.eventCount !== a.eventCount) return b.eventCount - a.eventCount;
+      return a.eventName.localeCompare(b.eventName);
+    });
+  }, [eventsByName, leadEvents, eventSearch]);
+
+  // Total count for selected lead events (over the discovery window).
+  const selectedCount = useMemo(() => {
+    return leadEvents.reduce(
+      (sum, name) => sum + (eventsByName.get(name)?.eventCount ?? 0),
+      0,
+    );
+  }, [eventsByName, leadEvents]);
+
+  function toggleEvent(eventName: string) {
+    setLeadEvents((prev) =>
+      prev.includes(eventName)
+        ? prev.filter((n) => n !== eventName)
+        : [...prev, eventName],
+    );
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -63,7 +125,8 @@ export function BusinessContextForm({ initial }: Props) {
         targetAudience: targetAudience.trim() || null,
         brandVoice: brandVoice === "" ? null : brandVoice,
         businessGoals: businessGoals.trim() || null,
-        leadEventName: leadEventName.trim() || null,
+        leadEvents: leadEvents.length > 0 ? leadEvents : null,
+        leadLabel: leadLabel.trim() || null,
       });
       if ("error" in result) {
         toast.error(`Gagal menyimpan: ${result.error}`);
@@ -74,7 +137,7 @@ export function BusinessContextForm({ initial }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="industry">Industri / model bisnis</Label>
         <Input
@@ -130,19 +193,124 @@ export function BusinessContextForm({ initial }: Props) {
         />
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="lead-event">GA4 lead event name</Label>
-        <Input
-          id="lead-event"
-          value={leadEventName}
-          onChange={(e) => setLeadEventName(e.target.value)}
-          placeholder="Contoh: generate_lead, form_submit, book_demo"
-          maxLength={100}
-        />
-        <p className="text-muted-foreground text-xs">
-          Event GA4 yang menurut Anda = "lead" di bisnis ini. AI akan pakai
-          istilah ini secara konsisten saat membahas leads.
-        </p>
+      {/* ─── Lead events picker ─────────────────────────────────── */}
+      <div className="flex flex-col gap-3 rounded-lg border border-border/60 bg-muted/30 p-4">
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-foreground text-[13px] font-semibold">
+            Definisi Lead
+          </Label>
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            Pilih event GA4 yang Anda anggap "lead". Bisa multi-select —
+            misal <code className="bg-background rounded px-1 py-0.5">generate_lead</code>{" "}
+            + <code className="bg-background rounded px-1 py-0.5">ebook_download</code>{" "}
+            + <code className="bg-background rounded px-1 py-0.5">whatsapp_click</code>.
+            AI akan menghitung total ini sebagai "lead", bukan total{" "}
+            <code className="bg-background rounded px-1 py-0.5">conversions</code>{" "}
+            generik dari GA4.
+          </p>
+        </div>
+
+        {discoveredEvents.length === 0 && leadEvents.length === 0 ? (
+          <p className="text-muted-foreground rounded-md bg-background px-3 py-2 text-xs italic">
+            Belum bisa load daftar event GA4 — pastikan koneksi GA4
+            aktif dan sudah punya data 30 hari terakhir.
+          </p>
+        ) : (
+          <>
+            <div className="relative">
+              <Search className="text-muted-foreground/60 absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2" />
+              <Input
+                value={eventSearch}
+                onChange={(e) => setEventSearch(e.target.value)}
+                placeholder="Cari event…"
+                className="h-8 pl-8 text-xs"
+              />
+            </div>
+            <div className="border-border/60 max-h-72 overflow-y-auto rounded-md border bg-background">
+              {visibleEvents.length === 0 ? (
+                <p className="text-muted-foreground p-3 text-center text-xs italic">
+                  Tidak ada event yang match.
+                </p>
+              ) : (
+                <ul className="divide-border/40 divide-y">
+                  {visibleEvents.map((event) => {
+                    const isSelected = leadEvents.includes(event.eventName);
+                    return (
+                      <li key={event.eventName}>
+                        <button
+                          type="button"
+                          onClick={() => toggleEvent(event.eventName)}
+                          className={cn(
+                            "hover:bg-muted/50 flex w-full items-center gap-3 px-3 py-2 text-left transition-colors",
+                            isSelected && "bg-emerald-50/40 dark:bg-emerald-950/20",
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "flex size-4 shrink-0 items-center justify-center rounded border-[1.5px] transition-colors",
+                              isSelected
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-border/80 bg-background",
+                            )}
+                          >
+                            {isSelected ? <Check className="size-3" /> : null}
+                          </span>
+                          <span className="text-foreground min-w-0 flex-1 truncate font-mono text-[12.5px]">
+                            {event.eventName}
+                          </span>
+                          <span className="text-muted-foreground tabular-nums text-[11px]">
+                            {event.eventCount > 0
+                              ? `~${idFmt.format(event.eventCount)}/30d`
+                              : "—"}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </>
+        )}
+
+        {leadEvents.length > 0 ? (
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">
+              <strong className="text-foreground tabular-nums">
+                {leadEvents.length}
+              </strong>{" "}
+              event terpilih · ~
+              <strong className="text-foreground tabular-nums">
+                {idFmt.format(selectedCount)}
+              </strong>{" "}
+              total / 30 hari
+            </span>
+            <button
+              type="button"
+              onClick={() => setLeadEvents([])}
+              className="text-muted-foreground hover:text-foreground underline-offset-4 hover:underline"
+            >
+              Clear semua
+            </button>
+          </div>
+        ) : null}
+
+        <div className="flex flex-col gap-1.5">
+          <Label
+            htmlFor="lead-label"
+            className="text-foreground text-[12px] font-medium"
+          >
+            Label custom (opsional)
+          </Label>
+          <Input
+            id="lead-label"
+            value={leadLabel}
+            onChange={(e) => setLeadLabel(e.target.value)}
+            placeholder="Default: lead. Bisa diisi: MQL, qualified action, dll."
+            maxLength={50}
+            className="h-8 text-sm"
+          />
+        </div>
       </div>
 
       <div className="flex justify-end">

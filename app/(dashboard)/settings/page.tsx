@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { monthlyTargets } from "@/lib/db/schema";
 import { getBusinessContext } from "@/lib/business-context";
+import { discoverGa4Events } from "@/lib/ga4-event-discovery";
 import {
   Card,
   CardContent,
@@ -21,7 +22,7 @@ export default async function SettingsPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const [targets, businessContext] = await Promise.all([
+  const [targets, businessContext, discoveredEvents] = await Promise.all([
     db
       .select({
         year: monthlyTargets.year,
@@ -32,6 +33,14 @@ export default async function SettingsPage() {
       .from(monthlyTargets)
       .where(eq(monthlyTargets.userId, session.user.id)),
     getBusinessContext(session.user.id),
+    // Live-fetch GA4 events from user's connected properties so the
+    // multi-select lead-event picker shows real options with counts.
+    // Tolerates failure (returns []) if no GA4 connection or token
+    // expired — the picker will show a friendly empty state.
+    discoverGa4Events(session.user.id).catch((err) => {
+      console.error("[settings] GA4 event discovery failed:", err);
+      return [];
+    }),
   ]);
 
   return (
@@ -78,10 +87,12 @@ export default async function SettingsPage() {
                     targetAudience: businessContext.targetAudience,
                     brandVoice: businessContext.brandVoice,
                     businessGoals: businessContext.businessGoals,
-                    leadEventName: businessContext.leadEventName,
+                    leadEvents: businessContext.leadEvents,
+                    leadLabel: businessContext.leadLabel,
                   }
                 : null
             }
+            discoveredEvents={discoveredEvents}
           />
         </CardContent>
       </Card>

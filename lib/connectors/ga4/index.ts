@@ -19,6 +19,19 @@ const DAILY_METRICS = [
   "engagementRate",
 ] as const;
 
+// Per-event breakdown query. Sidecar to the daily totals query —
+// gives us count of every event_name per day, which downstream
+// (fetch-report-data + AI prompt) uses to compute user-defined
+// "lead" totals (sum of selected event names) and per-event trend.
+//
+// Why a separate query: the daily totals query is dimensioned
+// only by date so we get one row per day. Adding eventName here
+// would multiply the row count and conflate the per-day rollup
+// with per-event rows. Cleaner to keep the rollup pure and store
+// the breakdown as a JSON map in raw_data.
+const EVENT_BREAKDOWN_DIMENSIONS = ["date", "eventName"] as const;
+const EVENT_BREAKDOWN_METRICS = ["eventCount"] as const;
+
 function parseGA4Date(yyyymmdd: string): string {
   // GA4 returns dates as "YYYYMMDD" with the `date` dimension.
   if (!/^\d{8}$/.test(yyyymmdd)) return "";
@@ -48,24 +61,63 @@ export const ga4Connector: Connector = {
   },
 
   async fetchMetrics({ tokens, accountId, range }) {
-    const response = await runReport({
-      accessToken: tokens.accessToken,
-      propertyId: accountId,
-      startDate: range.start,
-      endDate: range.end,
-      dimensions: DAILY_DIMENSIONS,
-      metrics: DAILY_METRICS,
-    });
+    // Fetch daily totals + event breakdown in parallel — both queries
+    // hit the same property, both bounded by the same date range.
+    const [dailyResponse, breakdownResponse] = await Promise.all([
+      runReport({
+        accessToken: tokens.accessToken,
+        propertyId: accountId,
+        startDate: range.start,
+        endDate: range.end,
+        dimensions: DAILY_DIMENSIONS,
+        metrics: DAILY_METRICS,
+      }),
+      runReport({
+        accessToken: tokens.accessToken,
+        propertyId: accountId,
+        startDate: range.start,
+        endDate: range.end,
+        dimensions: EVENT_BREAKDOWN_DIMENSIONS,
+        metrics: EVENT_BREAKDOWN_METRICS,
+      }),
+    ]);
 
-    const dimensionNames = response.dimensionHeaders?.map((h) => h.name) ?? [];
-    const metricNames = response.metricHeaders?.map((h) => h.name) ?? [];
+    // Build per-day event count map: { "2026-04-20": { form_submit: 5,
+    // generate_lead: 12, ... }, ... }. Used by downstream code to sum
+    // user-defined "lead events" without needing another fetch.
+    const eventBreakdownByDate = new Map<string, Record<string, number>>();
+    {
+      const dimNames =
+        breakdownResponse.dimensionHeaders?.map((h) => h.name) ?? [];
+      const metNames =
+        breakdownResponse.metricHeaders?.map((h) => h.name) ?? [];
+      const dIdx = dimNames.indexOf("date");
+      const eIdx = dimNames.indexOf("eventName");
+      const cIdx = metNames.indexOf("eventCount");
+      for (const row of breakdownResponse.rows ?? []) {
+        const dimVals = row.dimensionValues ?? [];
+        const metVals = row.metricValues ?? [];
+        const date = parseGA4Date(dimVals[dIdx]?.value ?? "");
+        const eventName = dimVals[eIdx]?.value;
+        const count = parseNumericMetric(metVals[cIdx]?.value);
+        if (!date || !eventName || count === null) continue;
+        const map = eventBreakdownByDate.get(date) ?? {};
+        map[eventName] = (map[eventName] ?? 0) + count;
+        eventBreakdownByDate.set(date, map);
+      }
+    }
+
+    // ─── Daily totals → NormalizedMetric rows ─────────────────────
+    const dimensionNames =
+      dailyResponse.dimensionHeaders?.map((h) => h.name) ?? [];
+    const metricNames = dailyResponse.metricHeaders?.map((h) => h.name) ?? [];
 
     const dateIdx = dimensionNames.indexOf("date");
     const conversionsIdx = metricNames.indexOf("conversions");
     const revenueIdx = metricNames.indexOf("totalRevenue");
 
     const rows: NormalizedMetric[] = [];
-    for (const row of response.rows ?? []) {
+    for (const row of dailyResponse.rows ?? []) {
       const dimVals = row.dimensionValues ?? [];
       const metVals = row.metricValues ?? [];
 
@@ -74,10 +126,15 @@ export const ga4Connector: Connector = {
       if (!date) continue;
 
       // Stash every metric (typed + untyped) in raw so downstream can
-      // surface things like sessions/pageviews without a schema change.
+      // surface things like sessions/pageviews without a schema
+      // change. Plus the eventBreakdown for this date.
       const raw: Record<string, unknown> = {};
       for (let i = 0; i < metricNames.length; i++) {
         raw[metricNames[i]] = parseNumericMetric(metVals[i]?.value);
+      }
+      const breakdown = eventBreakdownByDate.get(date);
+      if (breakdown) {
+        raw.eventBreakdown = breakdown;
       }
 
       rows.push({

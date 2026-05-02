@@ -21,10 +21,24 @@ export const userBusinessContext = pgTable("user_business_context", {
   brandVoice: text("brand_voice").$type<"professional" | "casual" | "technical">(),
   /** Free-form goals — e.g. "Lower CPL below 50K, grow MQL volume 2x". */
   businessGoals: text("business_goals"),
-  /** GA4 event name that the user considers a "lead" (e.g.
-   *  "generate_lead", "form_submit", "book_demo"). When set, the AI
-   *  is told to use this term consistently when discussing leads. */
-  leadEventName: text("lead_event_name"),
+
+  /** ─── Lead definition ─────────────────────────────────────────
+   *  Set of GA4 event names that the user considers "leads"
+   *  (qualified actions, MQL signals, dst). Stored as JSON array of
+   *  strings. When set, the AI insight engine sums daily counts of
+   *  these events as the "lead" metric instead of using GA4's
+   *  generic `conversions` metric (which aggregates ALL events
+   *  marked as conversions in the property settings).
+   *
+   *  Example: ["generate_lead", "ebook_download", "whatsapp_click"]
+   *
+   *  Empty / null = use GA4 `conversions` total as fallback. */
+  leadEvents: text("lead_events").array(),
+  /** Custom label the user uses to refer to the lead-equivalent
+   *  metric. Defaults to "lead" but can be "MQL", "qualified action",
+   *  "form submission", etc. Surfaced in AI narrative so output
+   *  matches the user's vocabulary. */
+  leadLabel: text("lead_label"),
 
   updatedAt: timestamp("updated_at", { mode: "date", withTimezone: true })
     .notNull()

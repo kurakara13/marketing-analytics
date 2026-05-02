@@ -2,6 +2,7 @@ import { and, eq, gte, inArray, lte } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import { connections, dailyMetrics, monthlyTargets } from "@/lib/db/schema";
+import { getBusinessContext } from "@/lib/business-context";
 import { getValidTokens } from "@/lib/google/tokens";
 import {
   fetchAITraffic,
@@ -23,6 +24,12 @@ export type ReportTotals = {
   sessions: number;
   pageviews: number;
   conversions: number;
+  /** Sum of counts of user-defined "lead events" (e.g.
+   *  generate_lead + ebook_download + whatsapp_click). Computed
+   *  from raw_data.eventBreakdown when business context has
+   *  lead_events set. NULL means user hasn't defined lead events
+   *  → AI prompt falls back to `conversions` total. */
+  leads: number | null;
   revenue: number;
   // Google Ads (paid)
   impressions: number;
@@ -109,6 +116,7 @@ const ZERO_TOTALS: ReportTotals = {
   sessions: 0,
   pageviews: 0,
   conversions: 0,
+  leads: null,
   revenue: 0,
   impressions: 0,
   clicks: 0,
@@ -138,6 +146,13 @@ function addInto(target: ReportTotals, row: ReportTotals): void {
   target.sessions += row.sessions;
   target.pageviews += row.pageviews;
   target.conversions += row.conversions;
+  // leads: null + n = n; n + null = n; null + null = null. We only
+  // ever populate leads when the user has lead_events set, and only
+  // GA4 row deltas carry it — so a single non-null somewhere will
+  // promote target.leads from null → 0 and accumulate.
+  if (row.leads !== null) {
+    target.leads = (target.leads ?? 0) + row.leads;
+  }
   target.revenue += row.revenue;
   target.impressions += row.impressions;
   target.clicks += row.clicks;
@@ -343,7 +358,14 @@ function mostRecentCompletedSunday(reference: Date): Date {
 // organic clicks (Search Console) from being summed with paid clicks
 // (Google Ads) — they share the same `clicks` column at the storage
 // level but are semantically different in the report.
-function rowToDelta(row: typeof dailyMetrics.$inferSelect): ReportTotals {
+//
+// `leadEvents` is the user-defined set of GA4 event names that count
+// as "lead". When provided, GA4 row deltas compute `leads` by summing
+// raw_data.eventBreakdown[name] for each event in the set.
+function rowToDelta(
+  row: typeof dailyMetrics.$inferSelect,
+  leadEvents: string[] | null,
+): ReportTotals {
   const raw = row.rawData as Record<string, unknown> | null;
   const delta = { ...ZERO_TOTALS };
 
@@ -353,6 +375,21 @@ function rowToDelta(row: typeof dailyMetrics.$inferSelect): ReportTotals {
       delta.revenue = asNumber(row.revenue);
       delta.sessions = raw ? asNumber(raw.sessions) : 0;
       delta.pageviews = raw ? asNumber(raw.screenPageViews) : 0;
+      // Compute lead count from event breakdown when the user has
+      // configured lead_events. We sum raw counts of each selected
+      // event from this day's breakdown.
+      if (leadEvents && leadEvents.length > 0) {
+        const breakdown = raw?.eventBreakdown as
+          | Record<string, number>
+          | undefined;
+        if (breakdown) {
+          let leadCount = 0;
+          for (const eventName of leadEvents) {
+            leadCount += asNumber(breakdown[eventName]);
+          }
+          delta.leads = leadCount;
+        }
+      }
       break;
     }
     case "google_ads": {
@@ -395,6 +432,14 @@ export async function fetchReportData(args: {
     period,
     anchorDate: args.anchorDate,
   });
+
+  // Pull user's lead-event definition once — used by rowToDelta to
+  // compute the leads metric from each GA4 row's event breakdown.
+  const businessContext = await getBusinessContext(args.userId);
+  const leadEvents =
+    businessContext?.leadEvents && businessContext.leadEvents.length > 0
+      ? businessContext.leadEvents
+      : null;
   const {
     windowStart,
     windowEnd,
@@ -463,7 +508,7 @@ export async function fetchReportData(args: {
   const campaignMap = new Map<string, CampaignBreakdownRow>();
 
   for (const row of rows) {
-    const delta = rowToDelta(row);
+    const delta = rowToDelta(row, leadEvents);
 
     if (row.date >= windowStart && row.date <= windowEnd) {
       addInto(totals, delta);

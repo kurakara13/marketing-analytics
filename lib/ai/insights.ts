@@ -221,9 +221,11 @@ function buildBusinessContextBlock(
           : "teknis & data-heavy";
     lines.push(`- Tone narrative yang diharapkan: ${voiceLabel}`);
   }
-  if (ctx.leadEventName) {
+  if (ctx.leadEvents && ctx.leadEvents.length > 0) {
+    const label = ctx.leadLabel?.trim() || "lead";
+    const events = ctx.leadEvents.map((e) => `\`${e}\``).join(" + ");
     lines.push(
-      `- Definisi "lead" untuk bisnis ini: GA4 event "${ctx.leadEventName}". Pakai istilah "lead" konsisten ketika merujuk ke event ini di observation/recommendation.`,
+      `- Definisi "${label}" untuk bisnis ini: total event GA4 ${events}. Pakai istilah "${label}" konsisten saat merujuk ke metric ini di observation/recommendation. JANGAN pakai istilah "conversions" generik untuk angka ini — itu confusion.`,
     );
   }
   if (lines.length === 0) return "";
@@ -257,9 +259,29 @@ function buildUserPrompt(
       `- Pageviews: ${fmtNum(totals.pageviews)} (delta: ${fmtDelta(totals.pageviews, previousTotals.pageviews)})`,
     );
   }
-  if (has("conversions")) {
+  // When the user has defined custom lead events, prefer the leads
+  // metric over generic GA4 conversions in the prompt — that's the
+  // metric they actually care about. We surface BOTH so the AI can
+  // call out the gap (mis. "172 conversions tapi 58 lead bersih
+  // setelah filter event").
+  const leadLabel = businessContext?.leadLabel?.trim() || "lead";
+  const hasCustomLeads =
+    businessContext?.leadEvents &&
+    businessContext.leadEvents.length > 0 &&
+    totals.leads !== null;
+  if (hasCustomLeads) {
+    const cur = totals.leads ?? 0;
+    const prev = previousTotals.leads ?? 0;
     totalsLines.push(
-      `- Conversions (GA4): ${fmtNum(totals.conversions)} (delta: ${fmtDelta(totals.conversions, previousTotals.conversions)})`,
+      `- ${leadLabel.charAt(0).toUpperCase() + leadLabel.slice(1)} (sum event ${businessContext!.leadEvents!.join(" + ")}): ${fmtNum(cur)} (delta: ${fmtDelta(cur, prev)})`,
+    );
+  }
+  if (has("conversions")) {
+    const noteSuffix = hasCustomLeads
+      ? ` — TOTAL conversions GA4 (semua event marked conversion); BUKAN sama dengan ${leadLabel} di atas`
+      : "";
+    totalsLines.push(
+      `- Conversions (GA4): ${fmtNum(totals.conversions)} (delta: ${fmtDelta(totals.conversions, previousTotals.conversions)})${noteSuffix}`,
     );
   }
   if (has("revenue")) {
@@ -281,14 +303,23 @@ function buildUserPrompt(
     totalsLines.push(
       `- Spend: ${fmtRupiah(totals.spend)} (delta: ${fmtDelta(totals.spend, previousTotals.spend)})`,
     );
-    if (totals.conversions > 0) {
-      const cpl = totals.spend / totals.conversions;
+    // CPL — prefer custom leads count when defined; fall back to
+    // GA4 conversions only when no lead events configured. The label
+    // also reflects which denominator we used so the AI doesn't
+    // mis-quote.
+    const cplDenominator = hasCustomLeads
+      ? (totals.leads ?? 0)
+      : totals.conversions;
+    const prevCplDenominator = hasCustomLeads
+      ? (previousTotals.leads ?? 0)
+      : previousTotals.conversions;
+    if (cplDenominator > 0) {
+      const cpl = totals.spend / cplDenominator;
       const prevCpl =
-        previousTotals.conversions > 0
-          ? previousTotals.spend / previousTotals.conversions
-          : 0;
+        prevCplDenominator > 0 ? previousTotals.spend / prevCplDenominator : 0;
+      const cplLabel = hasCustomLeads ? `Cost per ${leadLabel}` : "CPL";
       totalsLines.push(
-        `- CPL (computed): ${fmtRupiah(cpl)}${prevCpl > 0 ? ` (delta vs lalu: ${fmtDelta(cpl, prevCpl)})` : ""}`,
+        `- ${cplLabel} (computed): ${fmtRupiah(cpl)}${prevCpl > 0 ? ` (delta vs lalu: ${fmtDelta(cpl, prevCpl)})` : ""}`,
       );
     }
     if (totals.clicks > 0) {

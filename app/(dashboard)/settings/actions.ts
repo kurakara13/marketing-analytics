@@ -98,7 +98,11 @@ const businessContextInput = z.object({
   targetAudience: z.string().trim().max(500).optional().nullable(),
   brandVoice: z.enum(["professional", "casual", "technical"]).nullable(),
   businessGoals: z.string().trim().max(1000).optional().nullable(),
-  leadEventName: z.string().trim().max(100).optional().nullable(),
+  /** GA4 event names that the user counts as "lead". Multi-select
+   *  from discovered events; empty array = no user-defined leads. */
+  leadEvents: z.array(z.string().min(1).max(100)).max(20).optional().nullable(),
+  /** Custom term for "lead" (mis. "MQL", "Qualified Action"). */
+  leadLabel: z.string().trim().max(50).optional().nullable(),
 });
 
 export type SaveBusinessContextResult =
@@ -128,7 +132,8 @@ export async function saveBusinessContextAction(
     targetAudience: blank(parsed.data.targetAudience),
     brandVoice: parsed.data.brandVoice ?? null,
     businessGoals: blank(parsed.data.businessGoals),
-    leadEventName: blank(parsed.data.leadEventName),
+    leadEvents: parsed.data.leadEvents ?? null,
+    leadLabel: blank(parsed.data.leadLabel),
   });
 
   revalidatePath("/settings");
